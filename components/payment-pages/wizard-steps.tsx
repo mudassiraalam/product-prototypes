@@ -27,7 +27,7 @@ export interface WizardData {
   pageSlug: string;
   coverImage: string; // data URL or placeholder
   productImage: string;
-  currency: "INR" | "USD" | "EUR" | "GBP" | "AED";
+  currency: "INR";
 
   // Standard
   amountType: "fixed" | "customer" | "multiple";
@@ -63,7 +63,7 @@ export interface WizardData {
   // Branding / Customization
   brandColor: string;
   buttonLabel: string;
-  theme: "light" | "dark";
+  theme: "light" | "dark" | "system";
   layout: "centered" | "wide";
   fontStyle: "default" | "serif" | "mono";
   buttonStyle: "rounded" | "sharp" | "pill";
@@ -231,10 +231,7 @@ function ImageUpload({
   );
 }
 
-const CURRENCIES = [
-  { value: "INR", label: "INR (₹)" }, { value: "USD", label: "USD ($)" },
-  { value: "EUR", label: "EUR (€)" }, { value: "GBP", label: "GBP (£)" }, { value: "AED", label: "AED (د.إ)" },
-];
+// Currency is fixed to INR for EnKash
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared: Page Info Section (gallery, contact, terms) — used in all Step 1s
@@ -330,7 +327,6 @@ export function StepStandardDetails({ data, setData }: { data: WizardData; setDa
           />
         </div>
 
-        <Sel label="Currency" value={data.currency} onChange={v => setData({ ...data, currency: v as WizardData["currency"] })} options={CURRENCIES} />
 
         {data.amountType === "fixed" && (
           <Inp label="Amount" value={data.fixedAmount} onChange={v => setData({ ...data, fixedAmount: v })} placeholder="0.00" prefix={getSymbol(data.currency)} type="number" required />
@@ -379,7 +375,6 @@ export function StepDonationDetails({ data, setData }: { data: WizardData; setDa
       </SectionCard>
 
       <SectionCard title="Donation amounts">
-        <Sel label="Currency" value={data.currency} onChange={v => setData({ ...data, currency: v as WizardData["currency"] })} options={CURRENCIES} />
 
         <Label>Suggested Amounts</Label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 8 }}>
@@ -445,7 +440,6 @@ export function StepEventDetails({ data, setData }: { data: WizardData; setData:
       </SectionCard>
 
       <SectionCard title="Tickets">
-        <Sel label="Currency" value={data.currency} onChange={v => setData({ ...data, currency: v as WizardData["currency"] })} options={CURRENCIES} />
 
         {data.tickets.map((t, i) => (
           <div key={i} style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10, position: "relative" }}>
@@ -502,7 +496,6 @@ export function StepInvoiceDetails({ data, setData }: { data: WizardData; setDat
       </SectionCard>
 
       <SectionCard title="Line Items">
-        <Sel label="Currency" value={data.currency} onChange={v => setData({ ...data, currency: v as WizardData["currency"] })} options={CURRENCIES} />
 
         {data.lineItems.map((li, i) => (
           <div key={i} style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
@@ -667,9 +660,9 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
         <div style={{ marginBottom: 14 }}>
           <Label>Mode</Label>
           <SegmentedControl
-            options={[{ key: "light", label: "Light" }, { key: "dark", label: "Dark" }]}
+            options={[{ key: "light", label: "Light" }, { key: "dark", label: "Dark" }, { key: "system", label: "System" }]}
             value={data.theme}
-            onChange={v => setData({ ...data, theme: v as "light" | "dark" })}
+            onChange={v => setData({ ...data, theme: v as "light" | "dark" | "system" })}
           />
         </div>
       </SectionCard>
@@ -747,8 +740,8 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
-export function getSymbol(currency: WizardData["currency"]) {
-  return ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", AED: "د.إ" } as const)[currency];
+export function getSymbol(_currency?: string) {
+  return "₹";
 }
 
 export function getStepsForType(type: PageType): { key: string; label: string }[] {
