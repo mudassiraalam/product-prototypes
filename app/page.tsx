@@ -13,7 +13,7 @@ export default function Home() {
   const [selectedPage, setSelectedPage] = useState<PaymentPage | null>(null);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f4f6fb", fontFamily: "var(--font-inter, 'Inter', 'Segoe UI', sans-serif)", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", background: "#f4f6fb", fontFamily: "var(--font-inter, 'Inter', 'Segoe UI', sans-serif)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <TopNav />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {screen !== "wizard" && <AppSidebar active="payment-pages" />}
