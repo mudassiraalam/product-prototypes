@@ -34,7 +34,8 @@ export function PagePreview({
 }: {
   data: WizardData; device?: "desktop" | "mobile";
 }) {
-  const dark = data.theme === "dark";
+  const systemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const dark = data.theme === "dark" || (data.theme === "system" && systemDark);
   const pageBg = dark ? "#0b1220" : "#f4f6fb";
   const cardBg = dark ? "#162033" : "#ffffff";
   const subtleBg = dark ? "#1c2a44" : "#f9fafb";
