@@ -197,9 +197,9 @@ function PreviewPane({ data, device, onDeviceChange }: {
       <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: device === "mobile" ? "32px 16px" : "0", minHeight: 0 }}>
         {device === "mobile" ? (
           <div style={{
-            width: 300, maxHeight: "calc(100vh - 200px)", overflow: "hidden",
+            width: 300, height: "calc(100vh - 160px)", maxHeight: 620,
             border: `8px solid #0f172a`, borderRadius: 36, boxShadow: `0 20px 60px rgba(0,0,0,0.25)`,
-            background: C.white, display: "flex", flexDirection: "column",
+            background: C.white, display: "flex", flexDirection: "column", flexShrink: 0,
           }}>
             <div style={{ height: 24, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <div style={{ width: 60, height: 6, background: "#1e293b", borderRadius: 4 }} />
