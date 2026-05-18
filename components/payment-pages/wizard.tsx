@@ -11,7 +11,7 @@ import {
 
 const PAGE_TYPES: { key: PageType; icon: string; title: string; tagline: string; desc: string; color: string }[] = [
   {
-    key: "page", icon: "📄", title: "Payment Page",
+    key: "page", icon: "📄", title: "Standard Page",
     tagline: "Accept payments via a shareable link",
     desc: "One flow that adapts to what you're charging for — products, services, donations, events, fees. The page builds itself around your pricing choice.",
     color: "#1c5af4",
@@ -29,7 +29,7 @@ const PAGE_TYPES: { key: PageType; icon: string; title: string; tagline: string;
 // ──────────────────────────────────────────────────────────────────────────────
 function TypeSelector({ selected, onSelect }: { selected: PageType | null; onSelect: (key: PageType) => void }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, maxWidth: 760 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 24, width: "100%" }}>
       {PAGE_TYPES.map(pt => (
         <TypeOption key={pt.key} pt={pt} selected={selected === pt.key} onClick={() => onSelect(pt.key)} />
       ))}
@@ -47,28 +47,28 @@ function TypeOption({ pt, selected, onClick }: { pt: typeof PAGE_TYPES[number]; 
       onMouseLeave={() => setHovered(false)}
       style={{
         border: `2px solid ${active ? pt.color : C.border}`, borderRadius: radius.lg,
-        padding: "20px 18px", cursor: "pointer", background: active ? hexAlpha(pt.color, 0.05) : C.white,
+        padding: "28px 26px", cursor: "pointer", background: active ? hexAlpha(pt.color, 0.05) : C.white,
         transition: "all 0.2s", display: "flex", flexDirection: "column",
-        boxShadow: active ? `0 8px 24px ${hexAlpha(pt.color, 0.18)}` : shadow.sm,
-        transform: hovered && !selected ? "translateY(-2px)" : "translateY(0)",
-        minHeight: 220,
+        boxShadow: active ? `0 10px 30px ${hexAlpha(pt.color, 0.2)}` : shadow.sm,
+        transform: hovered && !selected ? "translateY(-3px)" : "translateY(0)",
+        minHeight: 260, textAlign: "left",
       }}
     >
       <div style={{
-        width: 44, height: 44, borderRadius: radius.md,
+        width: 52, height: 52, borderRadius: radius.md,
         background: active ? pt.color : C.bg,
         display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: 14, transition: "all 0.2s", fontSize: 20,
+        marginBottom: 18, transition: "all 0.2s", fontSize: 24,
         filter: active ? "brightness(1.1)" : "none",
       }}>
         <span style={{ filter: active ? "grayscale(0)" : "grayscale(0)" }}>{pt.icon}</span>
       </div>
-      <p style={{ fontSize: 16, fontWeight: 700, color: active ? pt.color : C.text, margin: "0 0 3px", letterSpacing: "-0.01em" }}>{pt.title}</p>
-      <p style={{ fontSize: 12, fontWeight: 600, color: active ? pt.color : C.textMuted, margin: "0 0 10px" }}>{pt.tagline}</p>
-      <p style={{ fontSize: 12, color: C.textMuted, margin: 0, lineHeight: 1.6, flex: 1 }}>{pt.desc}</p>
-      <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <p style={{ fontSize: 18, fontWeight: 700, color: active ? pt.color : C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>{pt.title}</p>
+      <p style={{ fontSize: 13, fontWeight: 600, color: active ? pt.color : C.textMuted, margin: "0 0 12px" }}>{pt.tagline}</p>
+      <p style={{ fontSize: 13, color: C.textMuted, margin: 0, lineHeight: 1.65, flex: 1 }}>{pt.desc}</p>
+      <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 11, color: C.textFaint, fontWeight: 600 }}>4 quick steps</span>
-        <span style={{ fontSize: 12, color: active ? pt.color : C.textMuted, fontWeight: 700 }}>
+        <span style={{ fontSize: 13, color: active ? pt.color : C.textMuted, fontWeight: 700 }}>
           {selected ? "✓ Selected" : "Choose →"}
         </span>
       </div>
@@ -412,9 +412,11 @@ export function Wizard({ onBack }: { onBack: () => void }) {
         <button onClick={onBack} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6, fontWeight: 500, alignSelf: "flex-start" }}>
           ← Back to dashboard
         </button>
-        <h2 style={{ fontSize: 26, fontWeight: 800, color: C.text, margin: "0 0 6px", letterSpacing: "-0.02em" }}>What kind of page do you want to create?</h2>
-        <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 32px", lineHeight: 1.5 }}>Each type has its own creation flow tailored to the use case.</p>
-        <TypeSelector selected={selectedType} onSelect={handleSelectType} />
+        <div style={{ width: "100%", maxWidth: 820, margin: "32px auto 0", textAlign: "center" }}>
+          <h2 style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 8px", letterSpacing: "-0.02em" }}>What kind of page do you want to create?</h2>
+          <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 36px", lineHeight: 1.5 }}>Pick the one that fits your use case — each flow is tailored for what you need.</p>
+          <TypeSelector selected={selectedType} onSelect={handleSelectType} />
+        </div>
       </div>
     );
   }
