@@ -5,33 +5,21 @@ import { Btn } from "./primitives";
 import { PagePreview } from "./page-preview";
 import {
   WizardData, DEFAULT_WIZARD, PageType, getStepsForType,
-  StepStandardDetails, StepDonationDetails, StepEventDetails, StepInvoiceDetails,
+  StepPageDetails, StepInvoiceDetails,
   StepCustomerFields, StepCustomization, StepSettings,
 } from "./wizard-steps";
 
 const PAGE_TYPES: { key: PageType; icon: string; title: string; tagline: string; desc: string; color: string }[] = [
   {
-    key: "standard", icon: "💳", title: "Standard",
-    tagline: "Sell products or services",
-    desc: "Fixed price, customer-decides, or multiple items. Best for courses, subscriptions, services.",
+    key: "page", icon: "📄", title: "Payment Page",
+    tagline: "Accept payments via a shareable link",
+    desc: "One flow that adapts to what you're charging for — products, services, donations, events, fees. The page builds itself around your pricing choice.",
     color: "#1c5af4",
   },
   {
-    key: "donation", icon: "❤", title: "Donation",
-    tagline: "Accept contributions",
-    desc: "Suggested amounts + custom donations, with optional 80G tax certificate generation.",
-    color: "#ea580c",
-  },
-  {
-    key: "event", icon: "🎟", title: "Event",
-    tagline: "Sell tickets",
-    desc: "Multiple ticket tiers, capacity limits, attendee details. Perfect for conferences and workshops.",
-    color: "#0891b2",
-  },
-  {
     key: "invoice", icon: "📃", title: "Invoice",
-    tagline: "Bill a client",
-    desc: "Tax-compliant invoice with line items, due date, and customer billing details.",
+    tagline: "Bill a specific client",
+    desc: "Tax-compliant invoice with line items, due date, and customer billing details. Best when you already know who you're billing.",
     color: "#7c3aed",
   },
 ];
@@ -41,7 +29,7 @@ const PAGE_TYPES: { key: PageType; icon: string; title: string; tagline: string;
 // ──────────────────────────────────────────────────────────────────────────────
 function TypeSelector({ selected, onSelect }: { selected: PageType | null; onSelect: (key: PageType) => void }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, maxWidth: 760 }}>
       {PAGE_TYPES.map(pt => (
         <TypeOption key={pt.key} pt={pt} selected={selected === pt.key} onClick={() => onSelect(pt.key)} />
       ))}
@@ -399,10 +387,8 @@ export function Wizard({ onBack }: { onBack: () => void }) {
 
   // Render step 1 based on type
   const renderStep1 = () => {
-    if (selectedType === "donation") return <StepDonationDetails data={data} setData={setData} />;
-    if (selectedType === "event") return <StepEventDetails data={data} setData={setData} />;
     if (selectedType === "invoice") return <StepInvoiceDetails data={data} setData={setData} />;
-    return <StepStandardDetails data={data} setData={setData} />;
+    return <StepPageDetails data={data} setData={setData} />;
   };
 
   const stepComponents = [
@@ -435,7 +421,7 @@ export function Wizard({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
-      <WizardSidebar steps={steps} currentStep={currentStep} completedSteps={completedSteps} pageType={selectedType ?? "standard"} brandColor={data.brandColor} />
+      <WizardSidebar steps={steps} currentStep={currentStep} completedSteps={completedSteps} pageType={selectedType ?? "page"} brandColor={data.brandColor} />
 
       {/* Form area — narrower */}
       <div style={{ width: 460, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, flexShrink: 0, background: C.white }}>
