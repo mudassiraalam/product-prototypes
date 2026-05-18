@@ -118,7 +118,7 @@ function DesktopPreview(p: PreviewProps) {
               </div>
             )}
 
-            {(data.pageType === "page" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
+            {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Event Info</p>
                 {data.eventDate && <InfoLine icon="📅" text={`${formatDate(data.eventDate)}${data.eventTime ? ` · ${data.eventTime}` : ""}`} color={text} />}
@@ -181,10 +181,10 @@ function DesktopPreview(p: PreviewProps) {
             {!data.description && !data.contactEmail && !data.contactPhone && !data.socialTwitter && !data.socialInstagram && !data.socialFacebook && !data.socialLinkedin && !(data as any).galleryImages?.length && (
               <div style={{ background: subtleBg, border: `1px dashed ${border}`, borderRadius: radius.md, padding: "20px 16px", textAlign: "center" }}>
                 <p style={{ fontSize: 20, margin: "0 0 8px" }}>
-                  {data.pageType === "invoice" ? "🧾" : data.isDonation ? "🤝" : data.itemsAreTickets ? "🎟️" : "🛍️"}
+                  {data.pageType === "invoice" ? "🧾" : (data.amountType === "customer" && data.isDonation) ? "🤝" : (data.amountType === "multiple" && data.itemsAreTickets) ? "🎟️" : "🛍️"}
                 </p>
                 <p style={{ fontSize: 13, fontWeight: 600, color: textMuted, margin: "0 0 4px" }}>
-                  {data.pageType === "invoice" ? "Add notes for your client" : data.isDonation ? "Add details about your cause" : data.itemsAreTickets ? "Tell customers about your event" : "Add info about your product or service"}
+                  {data.pageType === "invoice" ? "Add notes for your client" : (data.amountType === "customer" && data.isDonation) ? "Add details about your cause" : (data.amountType === "multiple" && data.itemsAreTickets) ? "Tell customers about your event" : "Add info about your product or service"}
                 </p>
                 <p style={{ fontSize: 11, color: textFaint, margin: 0, lineHeight: 1.5 }}>
                   Fill these in Step 1 under <strong>Page Info</strong> — they'll appear here.
@@ -287,7 +287,7 @@ function MobilePreview(p: PreviewProps) {
             )}
 
             {/* Event-specific info */}
-            {(data.pageType === "page" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
+            {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ background: subtleBg, borderRadius: radius.sm, padding: "10px 12px", marginBottom: 12, fontSize: 12 }}>
                 {data.eventDate && <p style={{ margin: "0 0 4px", color: text }}>📅 {data.eventDate}{data.eventTime ? ` at ${data.eventTime}` : ""}</p>}
                 {data.eventVenue && <p style={{ margin: 0, color: text }}>📍 {data.eventVenue}</p>}
@@ -360,15 +360,20 @@ function HeaderBlock({
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: compact ? 14 : 16, fontWeight: 700, color: text, margin: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {data.title || (data.pageType === "invoice" ? "Invoice" : data.isDonation ? "Your Cause Title" : data.itemsAreTickets ? "Your Event Name" : "Your Page Title")}
+          {data.title || (
+            data.pageType === "invoice" ? "Invoice"
+              : (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
+              : (data.amountType === "multiple" && data.itemsAreTickets) ? "Your Event Name"
+              : "Your Page Title"
+          )}
         </p>
-        {data.pageType === "page" && data.isDonation && (
+        {data.pageType === "page" && data.amountType === "customer" && data.isDonation && (
           <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>Every contribution counts</p>
         )}
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <p style={{ fontSize: 10, fontWeight: 600, color: textMuted, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {data.pageType === "invoice" ? "Total Due" : data.isDonation ? "Donation" : "Total Amount"}
+          {data.pageType === "invoice" ? "Total Due" : (data.amountType === "customer" && data.isDonation) ? "Donation" : "Total Amount"}
         </p>
         <p style={{ fontSize: compact ? 16 : 18, fontWeight: 800, color: text, margin: "2px 0 0" }}>{total}</p>
       </div>
@@ -392,16 +397,37 @@ function BillingPanel({
     boxSizing: "border-box", fontFamily: "inherit",
   };
 
+  // Computed states — defensive against any data combo where flags don't match amountType.
+  const isInvoice = data.pageType === "invoice";
+  const isCustomerDecides = data.pageType === "page" && data.amountType === "customer";
+  const isDonationFlow = isCustomerDecides && data.isDonation;
+  const isMultipleItems = data.pageType === "page" && data.amountType === "multiple";
+  const isTicketsFlow = isMultipleItems && data.itemsAreTickets;
+  const isFixed = data.pageType === "page" && data.amountType === "fixed";
+
+  // Label above the pricing panel
+  const amountLabel = isInvoice
+    ? "Amount Due"
+    : isDonationFlow
+      ? "Donation Amount"
+      : isCustomerDecides
+        ? "Choose an amount"
+        : isTicketsFlow
+          ? "Select Tickets"
+          : isMultipleItems
+            ? "Choose items"
+            : "Final Amount";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
-        {data.pageType === "invoice" ? "Amount Due" : data.isDonation ? "Donation Amount" : data.itemsAreTickets ? "Select Tickets" : "Final Amount"}
+        {amountLabel}
       </p>
 
-      {/* DONATION: suggested chips + custom */}
-      {data.pageType === "page" && data.isDonation && (
+      {/* CUSTOMER DECIDES (donation OR not) — suggested chips + custom input */}
+      {isCustomerDecides && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: compact ? "repeat(2, 1fr)" : "repeat(2, 1fr)", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
             {(data.suggestedAmounts.filter(a => a).length === 0 ? ["100", "500", "1000", "2500"] : data.suggestedAmounts).slice(0, 4).map((amt, i) => (
               <button key={i} style={{
                 padding: "10px", border: `1.5px solid ${i === 1 ? data.brandColor : border}`,
@@ -415,17 +441,28 @@ function BillingPanel({
           </div>
           <div style={{ display: "flex", alignItems: "center", border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden", marginTop: 4 }}>
             <span style={{ padding: "10px 12px", background: subtleBg, fontSize: 13, color: textMuted, fontWeight: 600 }}>{symbol}</span>
-            <span style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: textFaint, fontStyle: "italic" }}>Or enter any amount</span>
+            <span style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: textFaint, fontStyle: "italic" }}>
+              {isDonationFlow ? "Or enter any amount" : "Or enter a custom amount"}
+            </span>
           </div>
+          {(data.minAmount || data.maxAmount) && (
+            <p style={{ fontSize: 11, color: textFaint, margin: "2px 0 0" }}>
+              {data.minAmount && data.maxAmount
+                ? `Range: ${symbol}${data.minAmount} – ${symbol}${data.maxAmount}`
+                : data.minAmount
+                  ? `Minimum: ${symbol}${data.minAmount}`
+                  : `Maximum: ${symbol}${data.maxAmount}`}
+            </p>
+          )}
         </>
       )}
 
-      {/* EVENT: ticket selectors */}
-      {data.pageType === "page" && data.itemsAreTickets && (
+      {/* TICKETS — tier cards with capacity */}
+      {isTicketsFlow && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {(data.items.filter(t => t.label || t.amount).length === 0 ? [{ label: "General Admission", amount: "0", capacity: "", description: "" }] : data.items).map((t, i) => (
             <div key={i} style={{ border: `1px solid ${border}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{t.label || `Ticket ${i + 1}`}</p>
                 <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} seats` : ""}</p>
               </div>
@@ -439,8 +476,35 @@ function BillingPanel({
         </div>
       )}
 
+      {/* MULTIPLE ITEMS (non-tickets) — item rows with qty stepper */}
+      {isMultipleItems && !isTicketsFlow && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(data.items.filter(it => it.label || it.amount).length === 0
+            ? [{ label: "Item 1", amount: "0", description: "Add items in the editor to see them here" }]
+            : data.items
+          ).map((it, i) => (
+            <div key={i} style={{ border: `1px solid ${border}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+              {it.image && (
+                <div style={{ width: 40, height: 40, borderRadius: radius.sm, background: `url(${it.image}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{it.label || `Item ${i + 1}`}</p>
+                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>
+                  {symbol}{it.amount || "0"}{it.description ? ` · ${it.description.slice(0, 40)}${it.description.length > 40 ? "…" : ""}` : ""}
+                </p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
+                <span style={{ fontSize: 13, color: textMuted, padding: "0 4px" }}>−</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{i === 0 ? "1" : "0"}</span>
+                <span style={{ fontSize: 13, color: data.brandColor, padding: "0 4px" }}>+</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* INVOICE: line items table */}
-      {data.pageType === "invoice" && (
+      {isInvoice && (
         <div style={{ border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden" }}>
           {(data.lineItems.filter(li => li.description).length === 0 ? [{ description: "Service / Product", quantity: "1", unitPrice: "0" }] : data.lineItems).map((li, i) => (
             <div key={i} style={{ padding: "8px 12px", borderBottom: i < data.lineItems.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
@@ -460,31 +524,11 @@ function BillingPanel({
         </div>
       )}
 
-      {/* STANDARD: fixed amount preview / customer field */}
-      {data.pageType === "page" && !data.isDonation && !data.itemsAreTickets && (
-        <>
-          {data.amountType === "fixed" && (
-            <div style={{ ...inputStyle, color: text, fontWeight: 700, fontSize: 15 }}>
-              {symbol}{data.fixedAmount || "0.00"}
-            </div>
-          )}
-          {data.amountType === "customer" && (
-            <div style={{ display: "flex", alignItems: "center", border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden" }}>
-              <span style={{ padding: "10px 12px", background: subtleBg, fontSize: 13, color: textMuted, fontWeight: 600 }}>{symbol}</span>
-              <span style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: textFaint, fontStyle: "italic" }}>Enter amount</span>
-            </div>
-          )}
-          {data.amountType === "multiple" && data.items.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {data.items.slice(0, 3).map((it, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", border: `1px solid ${border}`, borderRadius: radius.sm, fontSize: 12 }}>
-                  <span style={{ color: text }}>{it.label || `Item ${i + 1}`}</span>
-                  <span style={{ fontWeight: 600, color: text }}>{symbol}{it.amount || "0"}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+      {/* FIXED AMOUNT */}
+      {isFixed && (
+        <div style={{ ...inputStyle, color: text, fontWeight: 700, fontSize: 15 }}>
+          {symbol}{data.fixedAmount || "0.00"}
+        </div>
       )}
 
       {/* Customer fields */}
@@ -501,7 +545,7 @@ function BillingPanel({
         </div>
       )}
 
-      {data.pageType === "page" && data.isDonation && data.is80G && (
+      {isDonationFlow && data.is80G && (
         <div style={{ background: hexAlpha("#16a34a", 0.08), border: `1px solid ${hexAlpha("#16a34a", 0.25)}`, borderRadius: radius.sm, padding: "8px 10px", fontSize: 11, color: "#15803d", display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 12 }}>✓</span>
           <span>80G receipt available · Tax exemption eligible</span>
@@ -579,17 +623,14 @@ function computeTotal(data: WizardData): string {
     return `${sym}${(sub + tax).toFixed(2)}`;
   }
 
-  // Payment page
-  if (data.isDonation) {
-    return `${sym}—`;
-  }
-  if (data.itemsAreTickets) {
-    const first = data.items.find(t => t.amount);
-    return first ? `${sym}${first.amount}` : `${sym}—`;
-  }
+  // Payment page — branch on amountType (the source of truth)
   if (data.amountType === "fixed") return `${sym}${data.fixedAmount || "0"}`;
   if (data.amountType === "customer") return `${sym}—`;
   if (data.amountType === "multiple") {
+    if (data.itemsAreTickets) {
+      const first = data.items.find(t => t.amount);
+      return first ? `${sym}${first.amount}` : `${sym}—`;
+    }
     const sum = data.items.reduce((acc, it) => acc + parseFloat(it.amount || "0"), 0);
     return sum > 0 ? `${sym}${sum.toFixed(2)}` : `${sym}—`;
   }
