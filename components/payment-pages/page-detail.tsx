@@ -7,12 +7,15 @@ import { TRANSACTIONS } from "./mock-data";
 import { PagePreview } from "./page-preview";
 import { WizardData, DEFAULT_WIZARD, PageType as WizardPageType } from "./wizard-steps";
 
-function pageTypeToWizard(t: string): WizardPageType {
+// Maps the dashboard-side PageType ("Standard" | "Donation" | "Event" | "Invoice")
+// to the wizard-side ("page" | "invoice"). For "Donation" and "Event" we also
+// flag isDonation / itemsAreTickets so the preview renders the right flavor.
+function pageTypeToWizardConfig(t: string): { pageType: WizardPageType; isDonation: boolean; itemsAreTickets: boolean } {
   const m = t.toLowerCase();
-  if (m === "donation") return "donation";
-  if (m === "event") return "event";
-  if (m === "invoice") return "invoice";
-  return "standard";
+  if (m === "invoice") return { pageType: "invoice", isDonation: false, itemsAreTickets: false };
+  if (m === "donation") return { pageType: "page", isDonation: true, itemsAreTickets: false };
+  if (m === "event") return { pageType: "page", isDonation: false, itemsAreTickets: true };
+  return { pageType: "page", isDonation: false, itemsAreTickets: false };
 }
 
 // ── QR Code Modal ──────────────────────────────────────────────────────────────
@@ -223,7 +226,7 @@ function EditPageModal({ page, onClose, onSave }: { page: PaymentPage; onClose: 
                 layout: page.layout,
                 amountType: page.amountType,
                 fixedAmount: page.amountType === "fixed" ? page.amount.replace(/[^0-9.]/g, "") : "",
-                pageType: pageTypeToWizard(page.type),
+                ...pageTypeToWizardConfig(page.type),
                 merchantName: "EnKash Demo",
               }}
             />
@@ -288,7 +291,7 @@ export function PageDetailView({ page: initialPage, onBack }: { page: PaymentPag
 
   const previewData: WizardData = {
     ...DEFAULT_WIZARD,
-    pageType: pageTypeToWizard(page.type),
+    ...pageTypeToWizardConfig(page.type),
     merchantName: "EnKash Demo",
     title: page.title,
     description: page.description ?? "",
