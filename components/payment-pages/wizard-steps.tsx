@@ -494,7 +494,22 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
               { key: "multiple", label: "Multiple Items" },
             ]}
             value={data.amountType}
-            onChange={v => setData({ ...data, amountType: v as "fixed" | "customer" | "multiple" })}
+            onChange={v => {
+              const next = v as "fixed" | "customer" | "multiple";
+              setData({
+                ...data,
+                amountType: next,
+                // Donation flags only apply to "customer" — clear when leaving.
+                isDonation: next === "customer" ? data.isDonation : false,
+                is80G: next === "customer" ? data.is80G : false,
+                collectPan: next === "customer" ? data.collectPan : false,
+                // Ticket flags only apply to "multiple" — clear when leaving.
+                itemsAreTickets: next === "multiple" ? data.itemsAreTickets : false,
+                eventDate: next === "multiple" ? data.eventDate : "",
+                eventTime: next === "multiple" ? data.eventTime : "",
+                eventVenue: next === "multiple" ? data.eventVenue : "",
+              });
+            }}
           />
         </div>
 
