@@ -3,14 +3,24 @@ import { useRef, useState } from "react";
 import { C, radius } from "./tokens";
 import { Inp, Textarea, Sel, Toggle, ColorPicker, SegmentedControl, InfoBanner, SectionCard, Label, Btn } from "./primitives";
 
-export type PageType = "standard" | "donation" | "event" | "invoice";
+export type PageType = "page" | "invoice";
 
-export interface Ticket {
-  name: string;
-  price: string;
-  capacity: string;
+// Unified item shape — covers both "Multiple Items" and "Tickets" cases.
+// When itemsAreTickets is true: capacity is shown, min/max qty are hidden.
+// When itemsAreTickets is false: min/max qty are shown, capacity is hidden.
+export interface MultiItem {
+  label: string;
+  amount: string;
   description?: string;
+  image?: string;
+  minQty?: string;
+  maxQty?: string;
+  capacity?: string;
+  optional?: boolean;
 }
+
+// Backward-compat alias for any caller still referencing Ticket
+export type Ticket = MultiItem;
 
 export interface LineItem {
   description: string;
@@ -25,28 +35,28 @@ export interface WizardData {
   title: string;
   description: string;
   pageSlug: string;
-  coverImage: string; // data URL or placeholder
+  coverImage: string;
   productImage: string;
   currency: "INR";
 
-  // Standard
+  // Pricing — used when pageType === "page"
   amountType: "fixed" | "customer" | "multiple";
   fixedAmount: string;
   minAmount: string;
   maxAmount: string;
-  items: { label: string; amount: string; amountType: "fixed" | "customer" | "quantity"; optional: boolean }[];
+  suggestedAmounts: string[];   // shown whenever amountType === "customer"
+  items: MultiItem[];           // unified — covers products AND tickets
 
-  // Donation
-  suggestedAmounts: string[];
-  allowCustomDonation: boolean;
+  // Donation flag + compliance (only when amountType === "customer")
+  isDonation: boolean;
   is80G: boolean;
   collectPan: boolean;
 
-  // Event
+  // Tickets flag + event-level details (only when amountType === "multiple")
+  itemsAreTickets: boolean;
   eventDate: string;
   eventTime: string;
   eventVenue: string;
-  tickets: Ticket[];
 
   // Invoice
   invoiceNumber: string;
@@ -89,7 +99,6 @@ export interface WizardData {
   // Settings - Publish
   expiryDate: string;
   maxPayments: string;
-  maxRevenue: string;
   successMessage: string;
   redirectUrl: string;
   sendReceipt: boolean;
@@ -98,7 +107,7 @@ export interface WizardData {
 }
 
 export const DEFAULT_WIZARD: WizardData = {
-  pageType: "standard",
+  pageType: "page",
   merchantName: "EnKash Demo",
   title: "",
   description: "",
@@ -111,17 +120,17 @@ export const DEFAULT_WIZARD: WizardData = {
   fixedAmount: "",
   minAmount: "",
   maxAmount: "",
+  suggestedAmounts: ["100", "500", "1000", "2500"],
   items: [],
 
-  suggestedAmounts: ["100", "500", "1000", "2500"],
-  allowCustomDonation: true,
+  isDonation: false,
   is80G: false,
   collectPan: false,
 
+  itemsAreTickets: false,
   eventDate: "",
   eventTime: "",
   eventVenue: "",
-  tickets: [{ name: "General Admission", price: "", capacity: "", description: "" }],
 
   invoiceNumber: "",
   customerName: "",
@@ -161,7 +170,6 @@ export const DEFAULT_WIZARD: WizardData = {
 
   expiryDate: "",
   maxPayments: "",
-  maxRevenue: "",
   successMessage: "",
   redirectUrl: "",
   sendReceipt: true,
@@ -195,7 +203,7 @@ function ImageUpload({
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <Label>{label}</Label>
+      {label && <Label>{label}</Label>}
       <div
         onClick={() => inputRef.current?.click()}
         style={{
@@ -231,10 +239,8 @@ function ImageUpload({
   );
 }
 
-// Currency is fixed to INR for EnKash
-
 // ──────────────────────────────────────────────────────────────────────────────
-// Shared: Page Info Section (gallery, contact, terms) — used in all Step 1s
+// Shared: Page Info Section (gallery, contact, terms) — used in both Step 1s
 // ──────────────────────────────────────────────────────────────────────────────
 function PageInfoSection({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   const [open, setOpen] = useState(false);
@@ -280,7 +286,7 @@ function PageInfoSection({ data, setData }: { data: WizardData; setData: (d: Wiz
               </div>
             )}
             {data.galleryImages.length < 4 && (
-              <ImageUpload label="" value="" onChange={addImage} hint="Add a product/service image" ratio="4:3" />
+              <ImageUpload label="" value="" onChange={addImage} hint="Add a product/service image" ratio="1:1" />
             )}
           </div>
 
@@ -293,15 +299,181 @@ function PageInfoSection({ data, setData }: { data: WizardData; setData: (d: Wiz
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// STEP 1: Page Details (per-type)
+// Items Editor — improved. Handles both products (Multiple Items) and tickets.
 // ──────────────────────────────────────────────────────────────────────────────
+function ItemsEditor({
+  data, setData, isTickets = false,
+}: {
+  data: WizardData; setData: (d: WizardData) => void; isTickets?: boolean;
+}) {
+  const updateItem = (i: number, patch: Partial<MultiItem>) => {
+    const arr = [...data.items]; arr[i] = { ...arr[i], ...patch };
+    setData({ ...data, items: arr });
+  };
+  const addItem = () =>
+    setData({
+      ...data,
+      items: [
+        ...data.items,
+        isTickets
+          ? { label: "", amount: "", capacity: "", description: "", image: "" }
+          : { label: "", amount: "", description: "", image: "", minQty: "", maxQty: "", optional: false },
+      ],
+    });
+  const removeItem = (i: number) => setData({ ...data, items: data.items.filter((_, idx) => idx !== i) });
 
-export function StepStandardDetails({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  // Empty state
+  if (data.items.length === 0) {
+    return (
+      <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: radius.md, padding: 20, textAlign: "center", marginBottom: 14 }}>
+        <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 10px" }}>{isTickets ? "No ticket tiers added yet" : "No items added yet"}</p>
+        <Btn variant="secondary" size="sm" onClick={addItem}>+ Add {isTickets ? "ticket tier" : "your first item"}</Btn>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {data.items.map((it, i) => (
+        <ItemRow
+          key={i}
+          item={it}
+          index={i}
+          isTickets={isTickets}
+          onUpdate={patch => updateItem(i, patch)}
+          onRemove={() => removeItem(i)}
+          currency={data.currency}
+        />
+      ))}
+      <Btn variant="secondary" size="sm" onClick={addItem}>+ Add another {isTickets ? "ticket tier" : "item"}</Btn>
+    </div>
+  );
+}
+
+function ItemRow({
+  item, index, isTickets, onUpdate, onRemove, currency,
+}: {
+  item: MultiItem; index: number; isTickets: boolean;
+  onUpdate: (patch: Partial<MultiItem>) => void; onRemove: () => void;
+  currency: "INR";
+}) {
+  const [showImage, setShowImage] = useState(!!item.image);
+
+  return (
+    <div style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>
+          {isTickets ? `Ticket Tier ${index + 1}` : `Item ${index + 1}`}
+        </p>
+        <button onClick={onRemove} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
+      </div>
+
+      <Inp
+        label={isTickets ? "Tier Name" : "Item Name"}
+        value={item.label}
+        onChange={v => onUpdate({ label: v })}
+        placeholder={isTickets ? "e.g. Early Bird, VIP, General" : "e.g. T-shirt — Medium"}
+      />
+
+      <div style={{ display: "grid", gridTemplateColumns: isTickets ? "1fr 1fr" : "1fr", gap: 10 }}>
+        <Inp
+          label="Price"
+          value={item.amount}
+          onChange={v => onUpdate({ amount: v })}
+          placeholder="0"
+          prefix={getSymbol(currency)}
+          type="number"
+        />
+        {isTickets && (
+          <Inp
+            label="Capacity"
+            value={item.capacity ?? ""}
+            onChange={v => onUpdate({ capacity: v })}
+            placeholder="100"
+            type="number"
+            hint="Total seats for this tier"
+          />
+        )}
+      </div>
+
+      <Inp
+        label="Description (optional)"
+        value={item.description ?? ""}
+        onChange={v => onUpdate({ description: v })}
+        placeholder={isTickets ? "What's included with this tier" : "Short description for this item"}
+      />
+
+      {/* Image — collapsible to keep the row tight */}
+      {!showImage && (
+        <button
+          onClick={() => setShowImage(true)}
+          style={{ background: "none", border: "none", color: C.blue, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 0", fontFamily: "inherit", marginBottom: 8 }}
+        >
+          + Add image
+        </button>
+      )}
+      {showImage && (
+        <ImageUpload
+          label="Image"
+          value={item.image ?? ""}
+          onChange={v => onUpdate({ image: v })}
+          ratio="1:1"
+          hint="Square thumbnail shown beside the item"
+        />
+      )}
+
+      {!isTickets && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Inp
+              label="Min Quantity"
+              value={item.minQty ?? ""}
+              onChange={v => onUpdate({ minQty: v })}
+              placeholder="1"
+              type="number"
+            />
+            <Inp
+              label="Max Quantity"
+              value={item.maxQty ?? ""}
+              onChange={v => onUpdate({ maxQty: v })}
+              placeholder="Unlimited"
+              type="number"
+            />
+          </div>
+          <Toggle
+            checked={item.optional ?? false}
+            onChange={v => onUpdate({ optional: v })}
+            label="Optional item"
+            desc="The customer can skip this item"
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STEP 1 — Payment Page (unified flow)
+// Progressive disclosure driven by pricing choice.
+// ──────────────────────────────────────────────────────────────────────────────
+export function StepPageDetails({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   const slugAuto = data.pageSlug || data.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+
+  // Suggested amounts editing helpers (shown for Customer Decides)
+  const updateSuggested = (i: number, v: string) => {
+    const arr = [...data.suggestedAmounts];
+    arr[i] = v;
+    setData({ ...data, suggestedAmounts: arr });
+  };
+  const removeSuggested = (i: number) => setData({ ...data, suggestedAmounts: data.suggestedAmounts.filter((_, idx) => idx !== i) });
+  const addSuggested = () => setData({ ...data, suggestedAmounts: [...data.suggestedAmounts, ""] });
+
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Page Details</h2>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>What are you selling? Add a clear title, description and a banner image.</p>
+      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>
+        What are you charging for? The page will adapt based on what you pick below.
+      </p>
 
       <SectionCard title="Basics">
         <Inp label="Page Title" value={data.title} onChange={v => setData({ ...data, title: v })} placeholder="e.g. Bluetooth Headphones" required />
@@ -310,12 +482,11 @@ export function StepStandardDetails({ data, setData }: { data: WizardData; setDa
 
       <SectionCard title="Visuals">
         <ImageUpload label="Cover Banner" value={data.coverImage} onChange={v => setData({ ...data, coverImage: v })} ratio="4:1" hint="Recommended size: 1200×300 px. Shown at the top of your page." />
-        <ImageUpload label="Product Image" value={data.productImage} onChange={v => setData({ ...data, productImage: v })} ratio="1:1" hint="Square thumbnail shown next to your product title." />
       </SectionCard>
 
       <SectionCard title="Pricing">
         <div style={{ marginBottom: 14 }}>
-          <Label>Amount Type</Label>
+          <Label>How are you charging?</Label>
           <SegmentedControl
             options={[
               { key: "fixed", label: "Fixed Amount" },
@@ -327,148 +498,120 @@ export function StepStandardDetails({ data, setData }: { data: WizardData; setDa
           />
         </div>
 
-
+        {/* ── FIXED ─────────────────────────────────────────────────────────── */}
         {data.amountType === "fixed" && (
-          <Inp label="Amount" value={data.fixedAmount} onChange={v => setData({ ...data, fixedAmount: v })} placeholder="0.00" prefix={getSymbol(data.currency)} type="number" required />
+          <Inp
+            label="Amount"
+            value={data.fixedAmount}
+            onChange={v => setData({ ...data, fixedAmount: v })}
+            placeholder="0.00"
+            prefix={getSymbol(data.currency)}
+            type="number"
+            required
+          />
         )}
+
+        {/* ── CUSTOMER DECIDES ──────────────────────────────────────────────── */}
         {data.amountType === "customer" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Inp label="Minimum" value={data.minAmount} onChange={v => setData({ ...data, minAmount: v })} placeholder="100" prefix={getSymbol(data.currency)} type="number" />
-            <Inp label="Maximum" value={data.maxAmount} onChange={v => setData({ ...data, maxAmount: v })} placeholder="100000" prefix={getSymbol(data.currency)} type="number" />
-          </div>
-        )}
-        {data.amountType === "multiple" && (
-          <ItemsEditor data={data} setData={setData} />
-        )}
-      </SectionCard>
-
-      <PageInfoSection data={data} setData={setData} />
-
-      <SectionCard title="URL">
-        <Inp label="Custom URL" value={data.pageSlug} onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} placeholder="bluetooth-headphones" prefix="pay.enkash.in/" hint={`Your page will be available at pay.enkash.in/${slugAuto || "your-slug"}`} />
-      </SectionCard>
-    </div>
-  );
-}
-
-export function StepDonationDetails({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
-  const updateSuggested = (i: number, v: string) => {
-    const arr = [...data.suggestedAmounts];
-    arr[i] = v;
-    setData({ ...data, suggestedAmounts: arr });
-  };
-  const removeSuggested = (i: number) => setData({ ...data, suggestedAmounts: data.suggestedAmounts.filter((_, idx) => idx !== i) });
-  const addSuggested = () => setData({ ...data, suggestedAmounts: [...data.suggestedAmounts, ""] });
-
-  return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Cause Details</h2>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>Tell donors about your cause and how their contribution helps.</p>
-
-      <SectionCard title="About the cause">
-        <Inp label="Title of the Cause" value={data.title} onChange={v => setData({ ...data, title: v })} placeholder="e.g. Help feed underprivileged children" required />
-        <Textarea label="Cause Story" value={data.description} onChange={v => setData({ ...data, description: v })} placeholder="Share your cause's mission, impact and the difference donations make..." rows={5} hint="A compelling story increases donations by up to 60%." />
-      </SectionCard>
-
-      <SectionCard title="Visuals">
-        <ImageUpload label="Cause Banner" value={data.coverImage} onChange={v => setData({ ...data, coverImage: v })} ratio="4:1" hint="A powerful image that represents your cause." />
-      </SectionCard>
-
-      <SectionCard title="Donation amounts">
-
-        <Label>Suggested Amounts</Label>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 8 }}>
-          {data.suggestedAmounts.map((amt, i) => (
-            <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <Inp value={amt} onChange={v => updateSuggested(i, v)} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
-              <button onClick={() => removeSuggested(i)} style={{ background: C.redBg, color: C.red, border: "none", borderRadius: radius.sm, width: 32, height: 38, cursor: "pointer", fontSize: 14, fontWeight: 700, marginBottom: 18, flexShrink: 0 }}>×</button>
-            </div>
-          ))}
-        </div>
-        <Btn variant="secondary" size="sm" onClick={addSuggested}>+ Add suggested amount</Btn>
-
-        <div style={{ marginTop: 18 }}>
-          <Toggle checked={data.allowCustomDonation} onChange={v => setData({ ...data, allowCustomDonation: v })} label="Allow custom amount" desc="Let donors enter any amount of their choice" />
-          {data.allowCustomDonation && (
+          <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Minimum" value={data.minAmount} onChange={v => setData({ ...data, minAmount: v })} placeholder="50" prefix={getSymbol(data.currency)} type="number" />
-              <Inp label="Maximum" value={data.maxAmount} onChange={v => setData({ ...data, maxAmount: v })} placeholder="500000" prefix={getSymbol(data.currency)} type="number" />
+              <Inp label="Minimum" value={data.minAmount} onChange={v => setData({ ...data, minAmount: v })} placeholder="100" prefix={getSymbol(data.currency)} type="number" />
+              <Inp label="Maximum" value={data.maxAmount} onChange={v => setData({ ...data, maxAmount: v })} placeholder="100000" prefix={getSymbol(data.currency)} type="number" />
             </div>
-          )}
-        </div>
-      </SectionCard>
 
-      <SectionCard title="Compliance (India)">
-        <Toggle checked={data.is80G} onChange={v => setData({ ...data, is80G: v, collectPan: v ? true : data.collectPan })} label="80G tax exemption certificate" desc="Generate 80G receipts automatically. Donors enjoy tax benefits." />
-        <Toggle checked={data.collectPan} onChange={v => setData({ ...data, collectPan: v })} label="Collect PAN from donors" desc="Required for 80G receipts and donations above ₹50,000" />
-      </SectionCard>
+            {/* Suggested amounts — always shown for Customer Decides */}
+            <div style={{ marginTop: 6 }}>
+              <Label>Suggested Amounts <span style={{ fontWeight: 400, color: C.textMuted }}>(optional)</span></Label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 8 }}>
+                {data.suggestedAmounts.map((amt, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <Inp value={amt} onChange={v => updateSuggested(i, v)} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
+                    <button onClick={() => removeSuggested(i)} style={{ background: C.redBg, color: C.red, border: "none", borderRadius: radius.sm, width: 32, height: 38, cursor: "pointer", fontSize: 14, fontWeight: 700, marginBottom: 18, flexShrink: 0, fontFamily: "inherit" }}>×</button>
+                  </div>
+                ))}
+              </div>
+              <Btn variant="secondary" size="sm" onClick={addSuggested}>+ Add suggested amount</Btn>
+              <p style={{ fontSize: 11, color: C.textFaint, margin: "8px 0 0", lineHeight: 1.5 }}>
+                Shown as quick-pick chips on the page. Customers can still type any amount within your min/max.
+              </p>
+            </div>
 
-      <PageInfoSection data={data} setData={setData} />
+            {/* Donation toggle — refinement of "Customer Decides" */}
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.border}` }}>
+              <Toggle
+                checked={data.isDonation}
+                onChange={v => setData({ ...data, isDonation: v, is80G: v ? data.is80G : false, collectPan: v ? data.collectPan : false })}
+                label="Donation page (enables 80G)"
+                desc="Marks this as a donation, unlocking India-specific compliance options below"
+              />
 
-      <SectionCard title="URL">
-        <Inp label="Custom URL" value={data.pageSlug} onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} placeholder="diwali-charity-2024" prefix="pay.enkash.in/" />
-      </SectionCard>
-    </div>
-  );
-}
-
-export function StepEventDetails({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
-  const updateTicket = (i: number, patch: Partial<Ticket>) => {
-    const arr = [...data.tickets]; arr[i] = { ...arr[i], ...patch };
-    setData({ ...data, tickets: arr });
-  };
-  const addTicket = () => setData({ ...data, tickets: [...data.tickets, { name: "", price: "", capacity: "", description: "" }] });
-  const removeTicket = (i: number) => setData({ ...data, tickets: data.tickets.filter((_, idx) => idx !== i) });
-
-  return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Event Details</h2>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>Set up your event, ticket tiers and capacity.</p>
-
-      <SectionCard title="Event">
-        <Inp label="Event Name" value={data.title} onChange={v => setData({ ...data, title: v })} placeholder="e.g. Tech Summit 2025" required />
-        <Textarea label="About the Event" value={data.description} onChange={v => setData({ ...data, description: v })} placeholder="Describe what attendees will experience, speakers, agenda..." rows={4} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Inp label="Date" value={data.eventDate} onChange={v => setData({ ...data, eventDate: v })} type="date" required />
-          <Inp label="Time" value={data.eventTime} onChange={v => setData({ ...data, eventTime: v })} type="time" />
-        </div>
-        <Inp label="Venue" value={data.eventVenue} onChange={v => setData({ ...data, eventVenue: v })} placeholder="e.g. JW Marriott, Bengaluru / Online" />
-      </SectionCard>
-
-      <SectionCard title="Banner">
-        <ImageUpload label="Event Banner" value={data.coverImage} onChange={v => setData({ ...data, coverImage: v })} ratio="16:9" hint="A great banner photo helps boost ticket sales." />
-      </SectionCard>
-
-      <SectionCard title="Tickets">
-
-        {data.tickets.map((t, i) => (
-          <div key={i} style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10, position: "relative" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>Ticket {i + 1}</p>
-              {data.tickets.length > 1 && (
-                <button onClick={() => removeTicket(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
+              {data.isDonation && (
+                <div style={{ marginTop: 6, paddingLeft: 4 }}>
+                  <Toggle
+                    checked={data.is80G}
+                    onChange={v => setData({ ...data, is80G: v, collectPan: v ? true : data.collectPan })}
+                    label="Generate 80G tax receipts"
+                    desc="Donors get automatic 80G receipts and can claim tax benefits"
+                  />
+                  <Toggle
+                    checked={data.collectPan}
+                    onChange={v => setData({ ...data, collectPan: v })}
+                    label="Collect PAN from donors"
+                    desc="Required for 80G receipts and donations above ₹50,000"
+                  />
+                </div>
               )}
             </div>
-            <Inp label="Name" value={t.name} onChange={v => updateTicket(i, { name: v })} placeholder="e.g. Early Bird, VIP, General" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Inp label="Price" value={t.price} onChange={v => updateTicket(i, { price: v })} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
-              <Inp label="Capacity" value={t.capacity} onChange={v => updateTicket(i, { capacity: v })} placeholder="100" type="number" hint="Total seats" />
+          </>
+        )}
+
+        {/* ── MULTIPLE ITEMS ────────────────────────────────────────────────── */}
+        {data.amountType === "multiple" && (
+          <>
+            <ItemsEditor data={data} setData={setData} isTickets={data.itemsAreTickets} />
+
+            {/* Tickets toggle — refinement of "Multiple Items" */}
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.border}` }}>
+              <Toggle
+                checked={data.itemsAreTickets}
+                onChange={v => setData({ ...data, itemsAreTickets: v })}
+                label="Items are tickets"
+                desc="Adds event date, time, venue and per-tier capacity"
+              />
+
+              {data.itemsAreTickets && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <Inp label="Event Date" value={data.eventDate} onChange={v => setData({ ...data, eventDate: v })} type="date" required />
+                    <Inp label="Event Time" value={data.eventTime} onChange={v => setData({ ...data, eventTime: v })} type="time" />
+                  </div>
+                  <Inp label="Venue" value={data.eventVenue} onChange={v => setData({ ...data, eventVenue: v })} placeholder="e.g. JW Marriott, Bengaluru / Online" />
+                </div>
+              )}
             </div>
-            <Inp label="Description" value={t.description ?? ""} onChange={v => updateTicket(i, { description: v })} placeholder="What this ticket includes (optional)" />
-          </div>
-        ))}
-        <Btn variant="secondary" size="sm" onClick={addTicket}>+ Add another ticket type</Btn>
+          </>
+        )}
       </SectionCard>
 
       <PageInfoSection data={data} setData={setData} />
 
       <SectionCard title="URL">
-        <Inp label="Custom URL" value={data.pageSlug} onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} placeholder="tech-summit-2025" prefix="pay.enkash.in/" />
+        <Inp
+          label="Custom URL"
+          value={data.pageSlug}
+          onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
+          placeholder="bluetooth-headphones"
+          prefix="pay.enkash.in/"
+          hint={`Your page will be available at pay.enkash.in/${slugAuto || "your-slug"}`}
+        />
       </SectionCard>
     </div>
   );
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// STEP 1 — Invoice (unchanged data model, kept as its own flow)
+// ──────────────────────────────────────────────────────────────────────────────
 export function StepInvoiceDetails({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   const updateLine = (i: number, patch: Partial<LineItem>) => {
     const arr = [...data.lineItems]; arr[i] = { ...arr[i], ...patch };
@@ -496,13 +639,12 @@ export function StepInvoiceDetails({ data, setData }: { data: WizardData; setDat
       </SectionCard>
 
       <SectionCard title="Line Items">
-
         {data.lineItems.map((li, i) => (
           <div key={i} style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>Item {i + 1}</p>
               {data.lineItems.length > 1 && (
-                <button onClick={() => removeLine(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Remove</button>
+                <button onClick={() => removeLine(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
               )}
             </div>
             <Inp label="Description" value={li.description} onChange={v => updateLine(i, { description: v })} placeholder="e.g. Website redesign" />
@@ -532,41 +674,6 @@ export function StepInvoiceDetails({ data, setData }: { data: WizardData; setDat
   );
 }
 
-// Reusable items editor for "multiple items" amount type in Standard
-function ItemsEditor({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
-  const updateItem = (i: number, patch: Partial<WizardData["items"][0]>) => {
-    const arr = [...data.items]; arr[i] = { ...arr[i], ...patch };
-    setData({ ...data, items: arr });
-  };
-  const addItem = () => setData({ ...data, items: [...data.items, { label: "", amount: "", amountType: "fixed", optional: false }] });
-  const removeItem = (i: number) => setData({ ...data, items: data.items.filter((_, idx) => idx !== i) });
-
-  if (data.items.length === 0) {
-    return (
-      <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: radius.md, padding: 20, textAlign: "center", marginBottom: 14 }}>
-        <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 10px" }}>No items added yet</p>
-        <Btn variant="secondary" size="sm" onClick={addItem}>+ Add your first item</Btn>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {data.items.map((it, i) => (
-        <div key={i} style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>Item {i + 1}</p>
-            <button onClick={() => removeItem(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Remove</button>
-          </div>
-          <Inp label="Item Name" value={it.label} onChange={v => updateItem(i, { label: v })} placeholder="e.g. T-shirt — Medium" />
-          <Inp label="Amount" value={it.amount} onChange={v => updateItem(i, { amount: v })} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
-        </div>
-      ))}
-      <Btn variant="secondary" size="sm" onClick={addItem}>+ Add another item</Btn>
-    </div>
-  );
-}
-
 // ──────────────────────────────────────────────────────────────────────────────
 // STEP 2: Customer Fields
 // ──────────────────────────────────────────────────────────────────────────────
@@ -578,8 +685,10 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
   const addField = () => setData({ ...data, customerFields: [...data.customerFields, { type: "text", label: "Custom Field", optional: true }] });
   const removeField = (i: number) => setData({ ...data, customerFields: data.customerFields.filter((_, idx) => idx !== i) });
 
-  const role = data.pageType === "donation" ? "donor" : data.pageType === "event" ? "attendee" : "customer";
-  const heading = data.pageType === "donation" ? "Donor Details" : data.pageType === "event" ? "Attendee Details" : "Customer Details";
+  // Determine the role label based on context
+  const isInvoice = data.pageType === "invoice";
+  const role = isInvoice ? "customer" : data.isDonation ? "donor" : data.itemsAreTickets ? "attendee" : "customer";
+  const heading = isInvoice ? "Customer Details" : data.isDonation ? "Donor Details" : data.itemsAreTickets ? "Attendee Details" : "Customer Details";
 
   return (
     <div>
@@ -594,7 +703,7 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
         <div key={i} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>Field {i + 1}</p>
-            <button onClick={() => removeField(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Remove</button>
+            <button onClick={() => removeField(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <Sel label="Type" value={f.type} onChange={v => {
@@ -609,7 +718,7 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
 
       <Btn variant="secondary" size="sm" onClick={addField}>+ Add another field</Btn>
 
-      {data.pageType === "donation" && data.is80G && (
+      {data.isDonation && data.is80G && (
         <div style={{ marginTop: 18 }}>
           <InfoBanner type="warning">
             For 80G compliance, PAN is required for donations above ₹50,000. We&apos;ve added it automatically.
@@ -692,6 +801,7 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
 
 // ──────────────────────────────────────────────────────────────────────────────
 // STEP 4: Settings & Publish
+// (Max Total Revenue field removed — no clear competitor parallel or use case.)
 // ──────────────────────────────────────────────────────────────────────────────
 export function StepSettings({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   return (
@@ -718,16 +828,13 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
 
       <SectionCard title="Limits & Expiry">
         <Inp label="Page Expires On" value={data.expiryDate} onChange={v => setData({ ...data, expiryDate: v })} type="date" hint="Leave blank for no expiry" />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Inp label="Max Number of Payments" value={data.maxPayments} onChange={v => setData({ ...data, maxPayments: v })} placeholder="Unlimited" type="number" />
-          <Inp label="Max Total Revenue" value={data.maxRevenue} onChange={v => setData({ ...data, maxRevenue: v })} placeholder="Unlimited" prefix={getSymbol(data.currency)} type="number" />
-        </div>
+        <Inp label="Max Number of Payments" value={data.maxPayments} onChange={v => setData({ ...data, maxPayments: v })} placeholder="Unlimited" type="number" hint="Auto-deactivate the page once this limit is reached" />
       </SectionCard>
 
       <SectionCard title="After Payment">
         <Toggle checked={data.sendReceipt} onChange={v => setData({ ...data, sendReceipt: v })} label="Send payment receipt by email" desc="A branded receipt is auto-emailed to the customer after a successful payment" />
-        <Textarea label="Custom Success Message" value={data.successMessage} onChange={v => setData({ ...data, successMessage: v })} placeholder="Thank you for your payment! We'll be in touch shortly." rows={2} />
-        <Inp label="Redirect URL (optional)" value={data.redirectUrl} onChange={v => setData({ ...data, redirectUrl: v })} placeholder="https://yourbrand.com/thank-you" hint="Customer is redirected here after payment instead of seeing the success message" />
+        <Textarea label="Custom Success Message" value={data.successMessage} onChange={v => setData({ ...data, successMessage: v })} placeholder="Thank you for your payment! We'll be in touch shortly." rows={2} hint="Shown only if no Redirect URL is set" />
+        <Inp label="Redirect URL (optional)" value={data.redirectUrl} onChange={v => setData({ ...data, redirectUrl: v })} placeholder="https://yourbrand.com/thank-you" hint="If set, customers are redirected here after payment — the success message above is ignored" />
       </SectionCard>
 
       <SectionCard title="Webhooks (advanced)">
@@ -745,11 +852,9 @@ export function getSymbol(_currency?: string) {
 }
 
 export function getStepsForType(type: PageType): { key: string; label: string }[] {
-  const labelStep1 = type === "donation" ? "Cause Details" : type === "event" ? "Event Details" : type === "invoice" ? "Invoice Details" : "Page Details";
-  const labelStep2 = type === "donation" ? "Donor Fields" : type === "event" ? "Attendee Fields" : type === "invoice" ? "Customer Fields" : "Customer Fields";
   return [
-    { key: "details", label: labelStep1 },
-    { key: "fields", label: labelStep2 },
+    { key: "details", label: type === "invoice" ? "Invoice Details" : "Page Details" },
+    { key: "fields", label: "Customer Fields" },
     { key: "customization", label: "Customization" },
     { key: "settings", label: "Settings & Publish" },
   ];
