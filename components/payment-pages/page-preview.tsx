@@ -118,7 +118,7 @@ function DesktopPreview(p: PreviewProps) {
               </div>
             )}
 
-            {data.pageType === "event" && (data.eventDate || data.eventVenue) && (
+            {(data.pageType === "page" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Event Info</p>
                 {data.eventDate && <InfoLine icon="📅" text={`${formatDate(data.eventDate)}${data.eventTime ? ` · ${data.eventTime}` : ""}`} color={text} />}
@@ -181,10 +181,10 @@ function DesktopPreview(p: PreviewProps) {
             {!data.description && !data.contactEmail && !data.contactPhone && !data.socialTwitter && !data.socialInstagram && !data.socialFacebook && !data.socialLinkedin && !(data as any).galleryImages?.length && (
               <div style={{ background: subtleBg, border: `1px dashed ${border}`, borderRadius: radius.md, padding: "20px 16px", textAlign: "center" }}>
                 <p style={{ fontSize: 20, margin: "0 0 8px" }}>
-                  {data.pageType === "donation" ? "🤝" : data.pageType === "event" ? "🎟️" : data.pageType === "invoice" ? "🧾" : "🛍️"}
+                  {data.pageType === "invoice" ? "🧾" : data.isDonation ? "🤝" : data.itemsAreTickets ? "🎟️" : "🛍️"}
                 </p>
                 <p style={{ fontSize: 13, fontWeight: 600, color: textMuted, margin: "0 0 4px" }}>
-                  {data.pageType === "donation" ? "Add details about your cause" : data.pageType === "event" ? "Tell customers about your event" : data.pageType === "invoice" ? "Add notes for your client" : "Add info about your product or service"}
+                  {data.pageType === "invoice" ? "Add notes for your client" : data.isDonation ? "Add details about your cause" : data.itemsAreTickets ? "Tell customers about your event" : "Add info about your product or service"}
                 </p>
                 <p style={{ fontSize: 11, color: textFaint, margin: 0, lineHeight: 1.5 }}>
                   Fill these in Step 1 under <strong>Page Info</strong> — they'll appear here.
@@ -287,7 +287,7 @@ function MobilePreview(p: PreviewProps) {
             )}
 
             {/* Event-specific info */}
-            {data.pageType === "event" && (data.eventDate || data.eventVenue) && (
+            {(data.pageType === "page" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ background: subtleBg, borderRadius: radius.sm, padding: "10px 12px", marginBottom: 12, fontSize: 12 }}>
                 {data.eventDate && <p style={{ margin: "0 0 4px", color: text }}>📅 {data.eventDate}{data.eventTime ? ` at ${data.eventTime}` : ""}</p>}
                 {data.eventVenue && <p style={{ margin: 0, color: text }}>📍 {data.eventVenue}</p>}
@@ -355,20 +355,20 @@ function HeaderBlock({
       background: subtleBg, borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}`,
       padding: compact ? "12px 16px" : "18px 28px", display: "flex", alignItems: "center", gap: compact ? 12 : 16,
     }}>
-      {data.productImage && data.pageType === "standard" && (
+      {data.productImage && data.pageType === "page" && data.amountType === "fixed" && (
         <div style={{ width: compact ? 44 : 56, height: compact ? 44 : 56, borderRadius: radius.sm, background: `url(${data.productImage}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: compact ? 14 : 16, fontWeight: 700, color: text, margin: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {data.title || (data.pageType === "donation" ? "Your Cause Title" : data.pageType === "event" ? "Your Event Name" : data.pageType === "invoice" ? "Invoice" : "Your Page Title")}
+          {data.title || (data.pageType === "invoice" ? "Invoice" : data.isDonation ? "Your Cause Title" : data.itemsAreTickets ? "Your Event Name" : "Your Page Title")}
         </p>
-        {data.pageType === "donation" && (
+        {data.pageType === "page" && data.isDonation && (
           <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>Every contribution counts</p>
         )}
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <p style={{ fontSize: 10, fontWeight: 600, color: textMuted, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {data.pageType === "donation" ? "Donation" : data.pageType === "invoice" ? "Total Due" : "Total Amount"}
+          {data.pageType === "invoice" ? "Total Due" : data.isDonation ? "Donation" : "Total Amount"}
         </p>
         <p style={{ fontSize: compact ? 16 : 18, fontWeight: 800, color: text, margin: "2px 0 0" }}>{total}</p>
       </div>
@@ -395,11 +395,11 @@ function BillingPanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
-        {data.pageType === "donation" ? "Donation Amount" : data.pageType === "event" ? "Select Tickets" : data.pageType === "invoice" ? "Amount Due" : "Final Amount"}
+        {data.pageType === "invoice" ? "Amount Due" : data.isDonation ? "Donation Amount" : data.itemsAreTickets ? "Select Tickets" : "Final Amount"}
       </p>
 
       {/* DONATION: suggested chips + custom */}
-      {data.pageType === "donation" && (
+      {data.pageType === "page" && data.isDonation && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: compact ? "repeat(2, 1fr)" : "repeat(2, 1fr)", gap: 8 }}>
             {(data.suggestedAmounts.filter(a => a).length === 0 ? ["100", "500", "1000", "2500"] : data.suggestedAmounts).slice(0, 4).map((amt, i) => (
@@ -413,23 +413,21 @@ function BillingPanel({
               </button>
             ))}
           </div>
-          {data.allowCustomDonation && (
-            <div style={{ display: "flex", alignItems: "center", border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden", marginTop: 4 }}>
-              <span style={{ padding: "10px 12px", background: subtleBg, fontSize: 13, color: textMuted, fontWeight: 600 }}>{symbol}</span>
-              <span style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: textFaint, fontStyle: "italic" }}>Or enter any amount</span>
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden", marginTop: 4 }}>
+            <span style={{ padding: "10px 12px", background: subtleBg, fontSize: 13, color: textMuted, fontWeight: 600 }}>{symbol}</span>
+            <span style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: textFaint, fontStyle: "italic" }}>Or enter any amount</span>
+          </div>
         </>
       )}
 
       {/* EVENT: ticket selectors */}
-      {data.pageType === "event" && (
+      {data.pageType === "page" && data.itemsAreTickets && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {(data.tickets.filter(t => t.name || t.price).length === 0 ? [{ name: "General Admission", price: "0", capacity: "", description: "" }] : data.tickets).map((t, i) => (
+          {(data.items.filter(t => t.label || t.amount).length === 0 ? [{ label: "General Admission", amount: "0", capacity: "", description: "" }] : data.items).map((t, i) => (
             <div key={i} style={{ border: `1px solid ${border}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{t.name || `Ticket ${i + 1}`}</p>
-                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.price || "0"}{t.capacity ? ` · ${t.capacity} seats` : ""}</p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{t.label || `Ticket ${i + 1}`}</p>
+                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} seats` : ""}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
                 <span style={{ fontSize: 13, color: textMuted, padding: "0 4px" }}>−</span>
@@ -463,7 +461,7 @@ function BillingPanel({
       )}
 
       {/* STANDARD: fixed amount preview / customer field */}
-      {data.pageType === "standard" && (
+      {data.pageType === "page" && !data.isDonation && !data.itemsAreTickets && (
         <>
           {data.amountType === "fixed" && (
             <div style={{ ...inputStyle, color: text, fontWeight: 700, fontSize: 15 }}>
@@ -503,7 +501,7 @@ function BillingPanel({
         </div>
       )}
 
-      {data.pageType === "donation" && data.is80G && (
+      {data.pageType === "page" && data.isDonation && data.is80G && (
         <div style={{ background: hexAlpha("#16a34a", 0.08), border: `1px solid ${hexAlpha("#16a34a", 0.25)}`, borderRadius: radius.sm, padding: "8px 10px", fontSize: 11, color: "#15803d", display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 12 }}>✓</span>
           <span>80G receipt available · Tax exemption eligible</span>
@@ -574,25 +572,26 @@ interface PreviewProps {
 
 function computeTotal(data: WizardData): string {
   const sym = getSymbol(data.currency);
-  if (data.pageType === "standard") {
-    if (data.amountType === "fixed") return `${sym}${data.fixedAmount || "0"}`;
-    if (data.amountType === "customer") return `${sym}—`;
-    if (data.amountType === "multiple") {
-      const sum = data.items.reduce((acc, it) => acc + parseFloat(it.amount || "0"), 0);
-      return sum > 0 ? `${sym}${sum.toFixed(2)}` : `${sym}—`;
-    }
-  }
-  if (data.pageType === "donation") {
-    return `${sym}—`;
-  }
-  if (data.pageType === "event") {
-    const first = data.tickets.find(t => t.price);
-    return first ? `${sym}${first.price}` : `${sym}—`;
-  }
+
   if (data.pageType === "invoice") {
     const sub = data.lineItems.reduce((acc, li) => acc + parseFloat(li.unitPrice || "0") * parseFloat(li.quantity || "1"), 0);
     const tax = sub * (parseFloat(data.taxPercent || "0") / 100);
     return `${sym}${(sub + tax).toFixed(2)}`;
+  }
+
+  // Payment page
+  if (data.isDonation) {
+    return `${sym}—`;
+  }
+  if (data.itemsAreTickets) {
+    const first = data.items.find(t => t.amount);
+    return first ? `${sym}${first.amount}` : `${sym}—`;
+  }
+  if (data.amountType === "fixed") return `${sym}${data.fixedAmount || "0"}`;
+  if (data.amountType === "customer") return `${sym}—`;
+  if (data.amountType === "multiple") {
+    const sum = data.items.reduce((acc, it) => acc + parseFloat(it.amount || "0"), 0);
+    return sum > 0 ? `${sym}${sum.toFixed(2)}` : `${sym}—`;
   }
   return `${sym}0`;
 }
