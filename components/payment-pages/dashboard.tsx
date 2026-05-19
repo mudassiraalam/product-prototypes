@@ -4,19 +4,35 @@ import { C, radius, shadow } from "./tokens";
 import { StatusBadge, Btn } from "./primitives";
 import { INITIAL_PAGES, PaymentPage, PageStatus, PageType } from "./mock-data";
 
-const TYPE_ICONS: Record<PageType, string> = {
-  Standard: "💳",
-  Donation: "❤️",
-  Event: "🎟",
-  Invoice: "📃",
-};
-
+// ──────────────────────────────────────────────────────────────────────────────
+// Type-level colors (primary). Kind-level icons/colors come from getKindInfo().
+// ──────────────────────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<PageType, string> = {
-  Standard: C.blue,
-  Donation: "#e11d48",
-  Event: "#7c3aed",
+  Page: C.blue,
   Invoice: "#0891b2",
 };
+
+// Derives the "kind" of a page from its configuration. The dashboard shows
+// this as a sub-label under the primary type, and uses the icon/color for
+// the row-leading icon next to the page title.
+type KindInfo = { label: string; icon: string; color: string };
+
+function getKindInfo(page: PaymentPage): KindInfo {
+  if (page.type === "Invoice") return { label: "Invoice", icon: "📃", color: "#0891b2" };
+  if (page.isDonation) return { label: "Donation", icon: "❤️", color: "#e11d48" };
+  if (page.itemsAreTickets) return { label: "Event Tickets", icon: "🎟", color: "#7c3aed" };
+  if (page.amountType === "multiple") return { label: "Multiple Items", icon: "🛍️", color: "#1c5af4" };
+  if (page.amountType === "customer") return { label: "Customer Decides", icon: "💰", color: "#16a34a" };
+  return { label: "Fixed Price", icon: "💳", color: "#1c5af4" };
+}
+
+// Conversion-rate display. Invoices are 1:1 by design so the metric isn't
+// meaningful for them — show an em-dash instead.
+function conversionDisplay(page: PaymentPage): string {
+  if (page.type === "Invoice") return "—";
+  if (page.views === 0) return "0.0%";
+  return `${((page.payments / page.views) * 100).toFixed(1)}%`;
+}
 
 function StatCard({ label, value, sub, color, icon }: {
   label: string; value: string; sub?: string; color: string; icon: string;
@@ -93,7 +109,7 @@ export function Dashboard({ onCreate, onView }: {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
         <StatCard label="Total Pages" value={pages.length.toString()} sub="All time" color={C.blue} icon="📄" />
         <StatCard label="Active Pages" value={pages.filter(p => p.status === "Active").length.toString()} sub="Accepting payments" color={C.green} icon="✅" />
-        <StatCard label="Total Payments" value={pages.reduce((a, p) => a + p.payments, 0).toString()} sub="Across all pages" color="#7c3aed" icon="💰" />
+        <StatCard label="Payments Received" value={pages.reduce((a, p) => a + p.payments, 0).toLocaleString()} sub="Successful transactions" color="#7c3aed" icon="💰" />
         <StatCard label="Total Revenue" value={formatRevenue(totalRevenue)} sub="Via payment pages" color={C.amber} icon="📈" />
       </div>
 
@@ -114,7 +130,8 @@ export function Dashboard({ onCreate, onView }: {
             </select>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...baseInp }}>
               <option value="All">All Types</option>
-              {["Standard", "Donation", "Event", "Invoice"].map(t => <option key={t}>{t}</option>)}
+              <option value="Page">Page</option>
+              <option value="Invoice">Invoice</option>
             </select>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -127,9 +144,6 @@ export function Dashboard({ onCreate, onView }: {
                 </button>
               ))}
             </div>
-            <button style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}>
-              ⬇ Export
-            </button>
           </div>
         </div>
 
@@ -139,7 +153,7 @@ export function Dashboard({ onCreate, onView }: {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: C.bg }}>
-                  {["Page", "Type", "Amount", "Views", "Payments", "Revenue", "Status", "Created", "Actions"].map(h => (
+                  {["Page", "Type", "Amount", "Views", "Payments", "Conversion", "Revenue", "Status", "Created", "Actions"].map(h => (
                     <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -147,20 +161,23 @@ export function Dashboard({ onCreate, onView }: {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: "48px", textAlign: "center" }}>
+                    <td colSpan={10} style={{ padding: "48px", textAlign: "center" }}>
                       <p style={{ fontSize: 15, color: C.textMuted, margin: "0 0 6px" }}>No payment pages match your filters</p>
                       <p style={{ fontSize: 13, color: C.textFaint, margin: 0 }}>Try adjusting your search or filters</p>
                     </td>
                   </tr>
-                ) : filtered.map(page => (
+                ) : filtered.map(page => {
+                  const kind = getKindInfo(page);
+                  const typeColor = TYPE_COLORS[page.type];
+                  return (
                   <tr key={page.id}
                     style={{ borderTop: `1px solid ${C.borderLight}`, transition: "background 0.1s" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#fafbfd")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                     <td style={{ padding: "13px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: radius.md, background: (TYPE_COLORS[page.type] ?? C.blue) + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-                          {TYPE_ICONS[page.type]}
+                        <div style={{ width: 36, height: 36, borderRadius: radius.md, background: kind.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+                          {kind.icon}
                         </div>
                         <div>
                           <p onClick={() => onView(page)} style={{ fontSize: 14, color: C.blue, fontWeight: 600, cursor: "pointer", margin: "0 0 2px", lineHeight: 1.3 }}>{page.title}</p>
@@ -175,13 +192,17 @@ export function Dashboard({ onCreate, onView }: {
                       </div>
                     </td>
                     <td style={{ padding: "13px 16px" }}>
-                      <span style={{ fontSize: 12, background: (TYPE_COLORS[page.type] ?? C.blue) + "18", color: TYPE_COLORS[page.type] ?? C.blue, borderRadius: radius.full, padding: "3px 9px", fontWeight: 600 }}>
-                        {page.type}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <span style={{ fontSize: 12, background: typeColor + "18", color: typeColor, borderRadius: radius.full, padding: "3px 9px", fontWeight: 700, alignSelf: "flex-start" }}>
+                          {page.type}
+                        </span>
+                        <span style={{ fontSize: 11, color: C.textFaint, fontWeight: 500, paddingLeft: 2 }}>{kind.label}</span>
+                      </div>
                     </td>
                     <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 600, color: C.textSecondary, whiteSpace: "nowrap" }}>{page.amount}</td>
                     <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted }}>{page.views.toLocaleString()}</td>
                     <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted }}>{page.payments.toLocaleString()}</td>
+                    <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted, fontWeight: 600 }}>{conversionDisplay(page)}</td>
                     <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 700, color: C.text }}>{page.revenue}</td>
                     <td style={{ padding: "13px 16px" }}><StatusBadge status={page.status} /></td>
                     <td style={{ padding: "13px 16px", fontSize: 12, color: C.textFaint, whiteSpace: "nowrap" }}>{page.created}</td>
@@ -225,7 +246,8 @@ export function Dashboard({ onCreate, onView }: {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -234,7 +256,9 @@ export function Dashboard({ onCreate, onView }: {
         {/* Grid view */}
         {view === "grid" && (
           <div style={{ padding: 20, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            {filtered.map(page => (
+            {filtered.map(page => {
+              const kind = getKindInfo(page);
+              return (
               <div key={page.id} style={{ border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden", background: C.white, transition: "box-shadow 0.15s" }}
                 onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.boxShadow = shadow.md)}
                 onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.boxShadow = "none")}>
@@ -242,13 +266,14 @@ export function Dashboard({ onCreate, onView }: {
                 <div style={{ height: 8, background: page.brandColor }} />
                 <div style={{ padding: "16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: radius.md, background: (TYPE_COLORS[page.type] ?? C.blue) + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                      {TYPE_ICONS[page.type]}
+                    <div style={{ width: 36, height: 36, borderRadius: radius.md, background: kind.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                      {kind.icon}
                     </div>
                     <StatusBadge status={page.status} />
                   </div>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 4px", lineHeight: 1.3 }}>{page.title}</p>
-                  <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 12px", fontFamily: "monospace" }}>/{page.slug}</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 2px", lineHeight: 1.3 }}>{page.title}</p>
+                  <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 4px", fontFamily: "monospace" }}>/{page.slug}</p>
+                  <p style={{ fontSize: 11, color: kind.color, margin: "0 0 12px", fontWeight: 600 }}>{page.type} · {kind.label}</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
                     {[["Views", page.views.toLocaleString()], ["Payments", page.payments.toString()], ["Revenue", page.revenue]].map(([l, v]) => (
                       <div key={l} style={{ background: C.bg, borderRadius: radius.sm, padding: "6px 8px", textAlign: "center" }}>
@@ -263,16 +288,16 @@ export function Dashboard({ onCreate, onView }: {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* Footer */}
-        <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: C.textFaint }}>
             Showing <strong style={{ color: C.textSecondary }}>{filtered.length}</strong> of <strong style={{ color: C.textSecondary }}>{pages.length}</strong> pages
           </span>
-          <span style={{ fontSize: 12, color: C.blue, cursor: "pointer", fontWeight: 600 }}>View archived pages →</span>
         </div>
       </div>
     </div>
