@@ -7,15 +7,16 @@ import { TRANSACTIONS } from "./mock-data";
 import { PagePreview } from "./page-preview";
 import { WizardData, DEFAULT_WIZARD, PageType as WizardPageType } from "./wizard-steps";
 
-// Maps the dashboard-side PageType ("Standard" | "Donation" | "Event" | "Invoice")
-// to the wizard-side ("page" | "invoice"). For "Donation" and "Event" we also
-// flag isDonation / itemsAreTickets so the preview renders the right flavor.
-function pageTypeToWizardConfig(t: string): { pageType: WizardPageType; isDonation: boolean; itemsAreTickets: boolean } {
-  const m = t.toLowerCase();
-  if (m === "invoice") return { pageType: "invoice", isDonation: false, itemsAreTickets: false };
-  if (m === "donation") return { pageType: "page", isDonation: true, itemsAreTickets: false };
-  if (m === "event") return { pageType: "page", isDonation: false, itemsAreTickets: true };
-  return { pageType: "page", isDonation: false, itemsAreTickets: false };
+// Maps a dashboard-side PaymentPage to the wizard-side config. Now that the
+// dashboard data model carries isDonation / itemsAreTickets directly, we read
+// them straight off the page object — no inference from a string type label.
+function pageToWizardConfig(page: PaymentPage): { pageType: WizardPageType; isDonation: boolean; itemsAreTickets: boolean } {
+  if (page.type === "Invoice") return { pageType: "invoice", isDonation: false, itemsAreTickets: false };
+  return {
+    pageType: "page",
+    isDonation: page.isDonation ?? false,
+    itemsAreTickets: page.itemsAreTickets ?? false,
+  };
 }
 
 // ── QR Code Modal ──────────────────────────────────────────────────────────────
@@ -226,7 +227,7 @@ function EditPageModal({ page, onClose, onSave }: { page: PaymentPage; onClose: 
                 layout: page.layout,
                 amountType: page.amountType,
                 fixedAmount: page.amountType === "fixed" ? page.amount.replace(/[^0-9.]/g, "") : "",
-                ...pageTypeToWizardConfig(page.type),
+                ...pageToWizardConfig(page),
                 merchantName: "EnKash Demo",
               }}
             />
@@ -291,7 +292,7 @@ export function PageDetailView({ page: initialPage, onBack }: { page: PaymentPag
 
   const previewData: WizardData = {
     ...DEFAULT_WIZARD,
-    ...pageTypeToWizardConfig(page.type),
+    ...pageToWizardConfig(page),
     merchantName: "EnKash Demo",
     title: page.title,
     description: page.description ?? "",
