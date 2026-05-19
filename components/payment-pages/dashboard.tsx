@@ -8,13 +8,14 @@ import { INITIAL_PAGES, PaymentPage, PageStatus, PageType } from "./mock-data";
 // Type-level colors (primary). Kind-level icons/colors come from getKindInfo().
 // ──────────────────────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<PageType, string> = {
-  Page: C.blue,
+  "Standard Page": C.blue,
   Invoice: "#0891b2",
 };
 
-// Derives the "kind" of a page from its configuration. The dashboard shows
-// this as a sub-label under the primary type, and uses the icon/color for
-// the row-leading icon next to the page title.
+// Derives the visual "kind" for the row icon. The sub-label is intentionally
+// not shown in the Type column — that would imply the merchant selected it,
+// when in fact it's inferred from amountType + isDonation + itemsAreTickets.
+// The icon alone preserves visual scannability without misleading the merchant.
 type KindInfo = { label: string; icon: string; color: string };
 
 function getKindInfo(page: PaymentPage): KindInfo {
@@ -24,14 +25,6 @@ function getKindInfo(page: PaymentPage): KindInfo {
   if (page.amountType === "multiple") return { label: "Multiple Items", icon: "🛍️", color: "#1c5af4" };
   if (page.amountType === "customer") return { label: "Customer Decides", icon: "💰", color: "#16a34a" };
   return { label: "Fixed Price", icon: "💳", color: "#1c5af4" };
-}
-
-// Conversion-rate display. Invoices are 1:1 by design so the metric isn't
-// meaningful for them — show an em-dash instead.
-function conversionDisplay(page: PaymentPage): string {
-  if (page.type === "Invoice") return "—";
-  if (page.views === 0) return "0.0%";
-  return `${((page.payments / page.views) * 100).toFixed(1)}%`;
 }
 
 function StatCard({ label, value, sub, color, icon }: {
@@ -66,13 +59,44 @@ export function Dashboard({ onCreate, onView }: {
   const [typeFilter, setTypeFilter] = useState("All");
   const [view, setView] = useState<"table" | "grid">("table");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  // Archived view: by default, archived pages are hidden from the main dashboard.
+  // Toggling this state flips the view to show ONLY archived pages — same pattern
+  // as Razorpay's "Archived" tab and Stripe's archive-toggle for products.
+  const [showArchived, setShowArchived] = useState(false);
 
   const filtered = pages.filter(p => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "All" || p.status === statusFilter;
     const matchType = typeFilter === "All" || p.type === typeFilter;
-    return matchSearch && matchStatus && matchType;
+    const matchArchive = showArchived ? p.status === "Archived" : p.status !== "Archived";
+    return matchSearch && matchStatus && matchType && matchArchive;
   });
+
+  const archivedCount = pages.filter(p => p.status === "Archived").length;
+
+  // CSV export — downloads the currently filtered view. Matches the pattern
+  // used by Stripe (Export current view) and Razorpay (Download as CSV).
+  const exportCsv = () => {
+    const headers = ["ID", "Title", "Slug", "Type", "Amount", "Views", "Payments", "Revenue", "Status", "Created"];
+    const rows = filtered.map(p => [p.id, p.title, p.slug, p.type, p.amount, p.views, p.payments, p.revenue, p.status, p.created]);
+    const escape = (v: string | number) => {
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [headers.map(escape).join(","), ...rows.map(r => r.map(escape).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `payment-pages-${showArchived ? "archived-" : ""}${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+  };
 
   const totalRevenue = pages.reduce((acc, p) => {
     const n = parseFloat(p.revenue.replace(/[₹,]/g, "")) || 0;
@@ -87,6 +111,11 @@ export function Dashboard({ onCreate, onView }: {
 
   const toggleStatus = (id: string) => {
     setPages(prev => prev.map(p => p.id === id ? { ...p, status: p.status === "Active" ? "Inactive" : "Active" as PageStatus } : p));
+    setActiveMenu(null);
+  };
+
+  const toggleArchive = (id: string) => {
+    setPages(prev => prev.map(p => p.id === id ? { ...p, status: p.status === "Archived" ? "Active" : "Archived" as PageStatus } : p));
     setActiveMenu(null);
   };
 
@@ -130,11 +159,31 @@ export function Dashboard({ onCreate, onView }: {
             </select>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...baseInp }}>
               <option value="All">All Types</option>
-              <option value="Page">Page</option>
+              <option value="Standard Page">Standard Page</option>
               <option value="Invoice">Invoice</option>
             </select>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Export — downloads the current filtered view as CSV */}
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setExportOpen(o => !o)}
+                style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}>
+                ⬇ Export
+              </button>
+              {exportOpen && (
+                <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 200, padding: 6 }}>
+                  <div onClick={exportCsv}
+                    style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: C.textSecondary }}
+                    onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    📄 Download as CSV
+                  </div>
+                  <p style={{ fontSize: 11, color: C.textFaint, margin: "4px 8px 2px", lineHeight: 1.4 }}>
+                    Exports {filtered.length} page{filtered.length === 1 ? "" : "s"} matching your current filters.
+                  </p>
+                </div>
+              )}
+            </div>
             {/* View toggle */}
             <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: radius.md, padding: 3 }}>
               {([["table", "☰"], ["grid", "⊞"]] as const).map(([k, icon]) => (
@@ -153,7 +202,7 @@ export function Dashboard({ onCreate, onView }: {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: C.bg }}>
-                  {["Page", "Type", "Amount", "Views", "Payments", "Conversion", "Revenue", "Status", "Created", "Actions"].map(h => (
+                  {["Page", "Type", "Amount", "Views", "Payments", "Revenue", "Status", "Created", "Actions"].map(h => (
                     <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -161,9 +210,13 @@ export function Dashboard({ onCreate, onView }: {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ padding: "48px", textAlign: "center" }}>
-                      <p style={{ fontSize: 15, color: C.textMuted, margin: "0 0 6px" }}>No payment pages match your filters</p>
-                      <p style={{ fontSize: 13, color: C.textFaint, margin: 0 }}>Try adjusting your search or filters</p>
+                    <td colSpan={9} style={{ padding: "48px", textAlign: "center" }}>
+                      <p style={{ fontSize: 15, color: C.textMuted, margin: "0 0 6px" }}>
+                        {showArchived ? "No archived pages" : "No payment pages match your filters"}
+                      </p>
+                      <p style={{ fontSize: 13, color: C.textFaint, margin: 0 }}>
+                        {showArchived ? "Archive a page to see it here" : "Try adjusting your search or filters"}
+                      </p>
                     </td>
                   </tr>
                 ) : filtered.map(page => {
@@ -192,17 +245,13 @@ export function Dashboard({ onCreate, onView }: {
                       </div>
                     </td>
                     <td style={{ padding: "13px 16px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <span style={{ fontSize: 12, background: typeColor + "18", color: typeColor, borderRadius: radius.full, padding: "3px 9px", fontWeight: 700, alignSelf: "flex-start" }}>
-                          {page.type}
-                        </span>
-                        <span style={{ fontSize: 11, color: C.textFaint, fontWeight: 500, paddingLeft: 2 }}>{kind.label}</span>
-                      </div>
+                      <span style={{ fontSize: 12, background: typeColor + "18", color: typeColor, borderRadius: radius.full, padding: "3px 9px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {page.type}
+                      </span>
                     </td>
                     <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 600, color: C.textSecondary, whiteSpace: "nowrap" }}>{page.amount}</td>
                     <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted }}>{page.views.toLocaleString()}</td>
                     <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted }}>{page.payments.toLocaleString()}</td>
-                    <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted, fontWeight: 600 }}>{conversionDisplay(page)}</td>
                     <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 700, color: C.text }}>{page.revenue}</td>
                     <td style={{ padding: "13px 16px" }}><StatusBadge status={page.status} /></td>
                     <td style={{ padding: "13px 16px", fontSize: 12, color: C.textFaint, whiteSpace: "nowrap" }}>{page.created}</td>
@@ -234,12 +283,20 @@ export function Dashboard({ onCreate, onView }: {
                                 </div>
                               ))}
                               <div style={{ height: 1, background: C.border, margin: "4px 0" }} />
-                              <div onClick={() => toggleStatus(page.id)}
-                                style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: page.status === "Active" ? C.red : C.green }}
-                                onMouseEnter={e => (e.currentTarget.style.background = page.status === "Active" ? C.redBg : C.greenBg)}
+                              <div onClick={() => toggleArchive(page.id)}
+                                style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: C.textSecondary }}
+                                onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
                                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                                {page.status === "Active" ? "⛔ Deactivate" : "✅ Activate"}
+                                {page.status === "Archived" ? "↩ Unarchive" : "🗄 Archive"}
                               </div>
+                              {page.status !== "Archived" && (
+                                <div onClick={() => toggleStatus(page.id)}
+                                  style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: page.status === "Active" ? C.red : C.green }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = page.status === "Active" ? C.redBg : C.greenBg)}
+                                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                                  {page.status === "Active" ? "⛔ Deactivate" : "✅ Activate"}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -273,7 +330,7 @@ export function Dashboard({ onCreate, onView }: {
                   </div>
                   <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 2px", lineHeight: 1.3 }}>{page.title}</p>
                   <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 4px", fontFamily: "monospace" }}>/{page.slug}</p>
-                  <p style={{ fontSize: 11, color: kind.color, margin: "0 0 12px", fontWeight: 600 }}>{page.type} · {kind.label}</p>
+                  <p style={{ fontSize: 11, color: kind.color, margin: "0 0 12px", fontWeight: 600 }}>{page.type}</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
                     {[["Views", page.views.toLocaleString()], ["Payments", page.payments.toString()], ["Revenue", page.revenue]].map(([l, v]) => (
                       <div key={l} style={{ background: C.bg, borderRadius: radius.sm, padding: "6px 8px", textAlign: "center" }}>
@@ -294,10 +351,17 @@ export function Dashboard({ onCreate, onView }: {
         )}
 
         {/* Footer */}
-        <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
+        <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: C.textFaint }}>
-            Showing <strong style={{ color: C.textSecondary }}>{filtered.length}</strong> of <strong style={{ color: C.textSecondary }}>{pages.length}</strong> pages
+            Showing <strong style={{ color: C.textSecondary }}>{filtered.length}</strong>{" "}
+            {showArchived ? "archived" : ""} page{filtered.length === 1 ? "" : "s"}
           </span>
+          <button onClick={() => setShowArchived(s => !s)}
+            style={{ fontSize: 12, color: C.blue, cursor: "pointer", fontWeight: 600, background: "none", border: "none", fontFamily: "inherit", padding: 0 }}>
+            {showArchived
+              ? "← Back to active pages"
+              : `View archived pages${archivedCount > 0 ? ` (${archivedCount})` : ""} →`}
+          </button>
         </div>
       </div>
     </div>
