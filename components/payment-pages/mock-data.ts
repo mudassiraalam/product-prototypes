@@ -1,9 +1,10 @@
-export type PageStatus = "Active" | "Inactive" | "Draft" | "Expired";
+export type PageStatus = "Active" | "Inactive" | "Draft" | "Expired" | "Archived";
 
 // Primary type — matches the 2 creation flows.
-// "Kind" (Donation / Event Tickets / Fixed Price / etc.) is derived from
-// amountType + isDonation + itemsAreTickets — see getKindInfo() in dashboard.tsx.
-export type PageType = "Page" | "Invoice";
+// Sub-categories (Donation / Event Tickets / Fixed Price / etc.) are derived
+// from amountType + isDonation + itemsAreTickets and shown via the row icon,
+// not as a label the merchant explicitly selected.
+export type PageType = "Standard Page" | "Invoice";
 
 export interface PaymentPage {
   id: string;
@@ -37,7 +38,7 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-CONF2024",
     title: "Tech Summit 2024 Registration",
     slug: "tech-summit-2024",
-    type: "Page",
+    type: "Standard Page",
     amountType: "multiple",
     itemsAreTickets: true,
     amount: "₹999 – ₹4,999",
@@ -58,7 +59,7 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-DIWALI24",
     title: "Diwali Charity Drive 2024",
     slug: "diwali-charity-2024",
-    type: "Page",
+    type: "Standard Page",
     amountType: "customer",
     isDonation: true,
     amount: "Any amount",
@@ -99,7 +100,7 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-COURSE01",
     title: "React Masterclass — Jan Batch",
     slug: "react-masterclass-jan",
-    type: "Page",
+    type: "Standard Page",
     amountType: "fixed",
     amount: "₹4,999",
     views: 672,
@@ -119,7 +120,7 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-MERCH05",
     title: "EnKash Branded Merchandise",
     slug: "enkash-merch",
-    type: "Page",
+    type: "Standard Page",
     amountType: "multiple",
     amount: "₹499 – ₹2,499",
     views: 234,
@@ -132,6 +133,27 @@ export const INITIAL_PAGES: PaymentPage[] = [
     theme: "dark",
     layout: "wide",
     description: "T-shirts, hoodies, mugs and notebooks featuring the EnKash brand.",
+  },
+
+  // ── Archived (last year's event) ────────────────────────────────────────
+  {
+    id: "PP-ENK-CONF2023",
+    title: "Tech Summit 2023 (Archived)",
+    slug: "tech-summit-2023",
+    type: "Standard Page",
+    amountType: "multiple",
+    itemsAreTickets: true,
+    amount: "₹799 – ₹3,999",
+    views: 2410,
+    payments: 412,
+    revenue: "₹11,24,580",
+    status: "Archived",
+    created: "10 Nov 2023, 09:15",
+    brandColor: "#0891b2",
+    buttonLabel: "Register",
+    theme: "light",
+    layout: "centered",
+    description: "Last year's edition. Archived after the event concluded.",
   },
 ];
 
