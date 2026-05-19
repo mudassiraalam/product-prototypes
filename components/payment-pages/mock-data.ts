@@ -1,5 +1,9 @@
 export type PageStatus = "Active" | "Inactive" | "Draft" | "Expired";
-export type PageType = "Standard" | "Donation" | "Event" | "Invoice";
+
+// Primary type — matches the 2 creation flows.
+// "Kind" (Donation / Event Tickets / Fixed Price / etc.) is derived from
+// amountType + isDonation + itemsAreTickets — see getKindInfo() in dashboard.tsx.
+export type PageType = "Page" | "Invoice";
 
 export interface PaymentPage {
   id: string;
@@ -7,6 +11,8 @@ export interface PaymentPage {
   slug: string;
   type: PageType;
   amountType: "fixed" | "customer" | "multiple";
+  isDonation?: boolean;
+  itemsAreTickets?: boolean;
   amount: string;
   views: number;
   payments: number;
@@ -21,31 +27,40 @@ export interface PaymentPage {
   description?: string;
 }
 
+// 5 examples — each demonstrates a different page configuration the new
+// 2-flow architecture can produce. Together they exercise every conditional
+// branch in the wizard (fixed / customer-decides / multiple-items, with the
+// donation and tickets refinements).
 export const INITIAL_PAGES: PaymentPage[] = [
+  // ── Page · Event Tickets (Multiple Items + itemsAreTickets) ─────────────
   {
     id: "PP-ENK-CONF2024",
     title: "Tech Summit 2024 Registration",
     slug: "tech-summit-2024",
-    type: "Event",
+    type: "Page",
     amountType: "multiple",
-    amount: "₹2,999",
+    itemsAreTickets: true,
+    amount: "₹999 – ₹4,999",
     views: 1842,
     payments: 326,
     revenue: "₹9,77,674",
     status: "Active",
     created: "15 Nov 2024, 10:30",
-    brandColor: "#1c5af4",
+    brandColor: "#7c3aed",
     buttonLabel: "Register Now",
     theme: "light",
     layout: "centered",
-    description: "Join us for India's biggest tech conference. Network with 1000+ professionals.",
+    description: "Join us for India's biggest tech conference. Network with 1000+ professionals across 3 tracks.",
   },
+
+  // ── Page · Donation (Customer Decides + isDonation) ─────────────────────
   {
-    id: "PP-ENK-DIWALI23",
+    id: "PP-ENK-DIWALI24",
     title: "Diwali Charity Drive 2024",
     slug: "diwali-charity-2024",
-    type: "Donation",
+    type: "Page",
     amountType: "customer",
+    isDonation: true,
     amount: "Any amount",
     views: 4210,
     payments: 918,
@@ -56,8 +71,10 @@ export const INITIAL_PAGES: PaymentPage[] = [
     buttonLabel: "Donate Now",
     theme: "light",
     layout: "centered",
-    description: "Help us bring joy to underprivileged children this Diwali season.",
+    description: "Help us bring joy to underprivileged children this Diwali. 80G receipts available.",
   },
+
+  // ── Invoice ─────────────────────────────────────────────────────────────
   {
     id: "PP-ENK-VENDOR42",
     title: "Vendor Invoice — Acme Corp Q4",
@@ -76,11 +93,13 @@ export const INITIAL_PAGES: PaymentPage[] = [
     theme: "light",
     layout: "centered",
   },
+
+  // ── Page · Fixed Price (Fixed) ──────────────────────────────────────────
   {
     id: "PP-ENK-COURSE01",
     title: "React Masterclass — Jan Batch",
     slug: "react-masterclass-jan",
-    type: "Standard",
+    type: "Page",
     amountType: "fixed",
     amount: "₹4,999",
     views: 672,
@@ -92,14 +111,17 @@ export const INITIAL_PAGES: PaymentPage[] = [
     buttonLabel: "Enroll Now",
     theme: "light",
     layout: "wide",
+    description: "8-week intensive React bootcamp. Live sessions, project reviews, job referrals.",
   },
+
+  // ── Page · Multiple Items (Multiple Items, non-tickets) ─────────────────
   {
     id: "PP-ENK-MERCH05",
     title: "EnKash Branded Merchandise",
     slug: "enkash-merch",
-    type: "Standard",
+    type: "Page",
     amountType: "multiple",
-    amount: "₹499–₹2,499",
+    amount: "₹499 – ₹2,499",
     views: 234,
     payments: 0,
     revenue: "₹0",
@@ -109,6 +131,7 @@ export const INITIAL_PAGES: PaymentPage[] = [
     buttonLabel: "Buy Now",
     theme: "dark",
     layout: "wide",
+    description: "T-shirts, hoodies, mugs and notebooks featuring the EnKash brand.",
   },
 ];
 
