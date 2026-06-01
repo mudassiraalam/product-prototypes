@@ -192,49 +192,53 @@ const FIELD_TYPES = [
   { value: "number", label: "Number" }, { value: "dropdown", label: "Dropdown" },
 ];
 
-// ── Crop Modal (LinkedIn-style: frame + zoom + drag, bakes crop to canvas) ──────
+// ── Crop Modal (whole image visible + dimmed mask + bright keep-frame) ──────────
 function CropModal({
   src, ratio, onCancel, onSave,
 }: {
   src: string; ratio: "16:9" | "1:1" | "4:1"; onCancel: () => void; onSave: (croppedDataUrl: string) => void;
 }) {
   const ar = ratio === "4:1" ? 4 : ratio === "1:1" ? 1 : 16 / 9;
-  const FRAME_W = 440;
-  const FRAME_H = Math.round(FRAME_W / ar);
+  // The whole modal stage. The keep-frame sits centered inside it.
+  const STAGE_W = 460;
+  const STAGE_H = 300;
+  // Keep-frame: the area that will actually be used, centered in the stage.
+  let FRAME_W = STAGE_W - 60;
+  let FRAME_H = FRAME_W / ar;
+  if (FRAME_H > STAGE_H - 60) { FRAME_H = STAGE_H - 60; FRAME_W = FRAME_H * ar; }
+  const frameLeft = (STAGE_W - FRAME_W) / 2;
+  const frameTop = (STAGE_H - FRAME_H) / 2;
 
   const [natural, setNatural] = useState({ w: 0, h: 0 });
   const [zoom, setZoom] = useState(1);
-  // pos = pixel coordinates of the image's top-left corner, relative to the frame's top-left.
-  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState({ x: 0, y: 0 }); // image top-left relative to STAGE top-left
   const drag = useRef<{ mx: number; my: number; px: number; py: number } | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const ready = natural.w > 0 && natural.h > 0;
 
-  // Base scale = smallest scale that still covers the frame (so no empty gaps at zoom 1).
+  // Base scale: image must at least cover the keep-FRAME (so the frame is never empty),
+  // but we display the whole image, so it can extend beyond the frame into the dimmed area.
   const baseScale = ready ? Math.max(FRAME_W / natural.w, FRAME_H / natural.h) : 1;
   const scale = baseScale * zoom;
   const dispW = natural.w * scale;
   const dispH = natural.h * scale;
 
-  // Clamp so the image always fully covers the frame (top-left can't go positive,
-  // bottom-right can't expose gaps).
+  // Clamp so the keep-frame is always fully covered by the image.
   const clamp = (x: number, y: number) => ({
-    x: Math.min(0, Math.max(FRAME_W - dispW, x)),
-    y: Math.min(0, Math.max(FRAME_H - dispH, y)),
+    x: Math.min(frameLeft, Math.max(frameLeft + FRAME_W - dispW, x)),
+    y: Math.min(frameTop, Math.max(frameTop + FRAME_H - dispH, y)),
   });
-
   const centerPos = (s: number) => ({
-    x: (FRAME_W - natural.w * s) / 2,
-    y: (FRAME_H - natural.h * s) / 2,
+    x: (STAGE_W - natural.w * s) / 2,
+    y: (STAGE_H - natural.h * s) / 2,
   });
 
   const onImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    imgRef.current = img;
+    const img = e.currentTarget; imgRef.current = img;
     const nw = img.naturalWidth, nh = img.naturalHeight;
     setNatural({ w: nw, h: nh });
     const s = Math.max(FRAME_W / nw, FRAME_H / nh);
-    setPos({ x: (FRAME_W - nw * s) / 2, y: (FRAME_H - nh * s) / 2 }); // centered
+    setPos({ x: (STAGE_W - nw * s) / 2, y: (STAGE_H - nh * s) / 2 });
   };
 
   const onDown = (e: React.PointerEvent) => {
@@ -243,53 +247,44 @@ function CropModal({
   };
   const onMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
-    const nx = drag.current.px + (e.clientX - drag.current.mx);
-    const ny = drag.current.py + (e.clientY - drag.current.my);
-    setPos(clamp(nx, ny));
+    setPos(clamp(drag.current.px + (e.clientX - drag.current.mx), drag.current.py + (e.clientY - drag.current.my)));
   };
   const onUp = () => { drag.current = null; };
 
   const onZoom = (z: number) => {
-    // Keep the frame center anchored while zooming.
-    const oldS = baseScale * zoom;
-    const newS = baseScale * z;
-    const cx = FRAME_W / 2, cy = FRAME_H / 2;
-    // image-space point under the frame center, preserved across zoom
-    const ix = (cx - pos.x) / oldS;
-    const iy = (cy - pos.y) / oldS;
-    const nx = cx - ix * newS;
-    const ny = cy - iy * newS;
-    setZoom(z);
-    // clamp with the NEW display size
+    const oldS = baseScale * zoom, newS = baseScale * z;
+    const cx = STAGE_W / 2, cy = STAGE_H / 2;
+    const ix = (cx - pos.x) / oldS, iy = (cy - pos.y) / oldS;
     const ndW = natural.w * newS, ndH = natural.h * newS;
+    setZoom(z);
     setPos({
-      x: Math.min(0, Math.max(FRAME_W - ndW, nx)),
-      y: Math.min(0, Math.max(FRAME_H - ndH, ny)),
+      x: Math.min(frameLeft, Math.max(frameLeft + FRAME_W - ndW, cx - ix * newS)),
+      y: Math.min(frameTop, Math.max(frameTop + FRAME_H - ndH, cy - iy * newS)),
     });
   };
 
   const handleSave = () => {
     const img = imgRef.current;
     if (!img || !ready) { onSave(src); return; }
-    const outScale = 2; // crisp output
+    const outScale = 2;
     const canvas = document.createElement("canvas");
-    canvas.width = FRAME_W * outScale;
-    canvas.height = FRAME_H * outScale;
+    canvas.width = Math.round(FRAME_W * outScale);
+    canvas.height = Math.round(FRAME_H * outScale);
     const ctx = canvas.getContext("2d");
     if (!ctx) { onSave(src); return; }
-    // The frame's top-left in image (natural) coordinates:
-    //   frameLeft_in_image = (0 - pos.x) / scale
-    const sx = (0 - pos.x) / scale;
-    const sy = (0 - pos.y) / scale;
-    const sw = FRAME_W / scale;
-    const sh = FRAME_H / scale;
+    // keep-frame top-left in image coords
+    const sx = (frameLeft - pos.x) / scale;
+    const sy = (frameTop - pos.y) / scale;
+    const sw = FRAME_W / scale, sh = FRAME_H / scale;
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    onSave(canvas.toDataURL("image/jpeg", 0.9));
+    onSave(canvas.toDataURL("image/jpeg", 0.92));
   };
+
+  const isCircle = false; // banner/logo use rectangles; ratio 1:1 still rectangular here
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: C.white, borderRadius: radius.lg, width: "min(520px, 100%)", overflow: "hidden", boxShadow: shadow.lg }}>
+      <div style={{ background: C.white, borderRadius: radius.lg, width: "min(540px, 100%)", overflow: "hidden", boxShadow: shadow.lg }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
           <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Edit photo</p>
           <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: C.textMuted, fontFamily: "inherit", lineHeight: 1 }}>×</button>
@@ -299,24 +294,29 @@ function CropModal({
           <div
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
             style={{
-              position: "relative", width: FRAME_W, height: FRAME_H, margin: "0 auto",
-              overflow: "hidden", borderRadius: radius.md, background: "#0f172a",
+              position: "relative", width: STAGE_W, height: STAGE_H, margin: "0 auto",
+              overflow: "hidden", borderRadius: radius.md, background: "#e2e8f0",
               cursor: "grab", touchAction: "none", userSelect: "none",
             }}
           >
-            {/* hidden loader to get natural size before first paint */}
             {!ready && <img src={src} alt="" onLoad={onImgLoad} style={{ position: "absolute", opacity: 0, pointerEvents: "none" }} />}
             {ready && (
-              <img
-                ref={imgRef} src={src} alt="crop" draggable={false}
-                style={{
-                  position: "absolute", left: pos.x, top: pos.y,
-                  width: dispW, height: dispH, maxWidth: "none", pointerEvents: "none",
-                }}
-              />
+              <>
+                {/* Whole image, fully visible */}
+                <img
+                  ref={imgRef} src={src} alt="crop" draggable={false}
+                  style={{ position: "absolute", left: pos.x, top: pos.y, width: dispW, height: dispH, maxWidth: "none", pointerEvents: "none" }}
+                />
+                {/* Dim overlay everywhere EXCEPT the keep-frame (4 strips around the frame) */}
+                <div style={{ position: "absolute", left: 0, top: 0, width: "100%", height: frameTop, background: "rgba(255,255,255,0.62)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", left: 0, top: frameTop + FRAME_H, width: "100%", bottom: 0, background: "rgba(255,255,255,0.62)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", left: 0, top: frameTop, width: frameLeft, height: FRAME_H, background: "rgba(255,255,255,0.62)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", left: frameLeft + FRAME_W, top: frameTop, right: 0, height: FRAME_H, background: "rgba(255,255,255,0.62)", pointerEvents: "none" }} />
+                {/* Bright keep-frame outline */}
+                <div style={{ position: "absolute", left: frameLeft, top: frameTop, width: FRAME_W, height: FRAME_H, border: `2px solid #ffffff`, boxShadow: "0 0 0 1px rgba(0,0,0,0.25)", borderRadius: isCircle ? "50%" : radius.sm, pointerEvents: "none" }} />
+              </>
             )}
-            <div style={{ position: "absolute", inset: 0, border: `2px solid rgba(255,255,255,0.9)`, borderRadius: radius.md, pointerEvents: "none" }} />
-            <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, padding: "3px 8px", borderRadius: radius.sm, pointerEvents: "none" }}>⤢ drag to reposition</div>
+            <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, padding: "3px 8px", borderRadius: radius.sm, pointerEvents: "none" }}>⤢ drag · only the framed area is used</div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
@@ -339,9 +339,10 @@ function CropModal({
 
 // ── Image Upload (opens crop modal, stores the cropped result — WYSIWYG) ────────
 function ImageUpload({
-  label, value, onChange, hint, ratio = "16:9",
+  label, value, onChange, hint, ratio = "16:9", noCrop = false,
 }: {
   label: string; value: string; onChange: (v: string) => void; hint?: string; ratio?: "16:9" | "1:1" | "4:1";
+  noCrop?: boolean;
   // legacy props accepted but unused (crop is baked into the image now)
   position?: number; onPositionChange?: (p: number) => void;
   zoom?: number; onZoomChange?: (z: number) => void;
@@ -365,7 +366,8 @@ function ImageUpload({
       const img = new Image();
       img.onload = () => { if (img.naturalWidth < MIN_WIDTH) setLowRes(true); };
       img.src = src;
-      setCropSrc(src); // open the crop modal
+      if (noCrop) { onChange(src); }    // gallery: use the whole image as-is
+      else { setCropSrc(src); }          // banner/logo: open crop modal
     };
     reader.readAsDataURL(file);
   };
@@ -392,12 +394,14 @@ function ImageUpload({
         )}
         {value && (
           <>
-            <button
-              onClick={e => { e.stopPropagation(); setCropSrc(value); }}
-              style={{ position: "absolute", top: 8, right: 80, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
-            >
-              Reposition
-            </button>
+            {!noCrop && (
+              <button
+                onClick={e => { e.stopPropagation(); setCropSrc(value); }}
+                style={{ position: "absolute", top: 8, right: 80, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
+              >
+                Reposition
+              </button>
+            )}
             <button
               onClick={e => { e.stopPropagation(); onChange(""); setError(""); setLowRes(false); }}
               style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
@@ -494,14 +498,14 @@ function PageInfoSection({ data, setData }: { data: WizardData; setData: (d: Wiz
             {data.galleryImages.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 8 }}>
                 {data.galleryImages.map((img, i) => (
-                  <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: radius.sm, background: `url(${img}) center/cover`, border: `1px solid ${C.border}` }}>
+                  <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: radius.sm, background: `${C.bg} url(${img}) center/contain no-repeat`, border: `1px solid ${C.border}` }}>
                     <button onClick={() => removeImage(i)} style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, cursor: "pointer", fontSize: 10, lineHeight: "18px", textAlign: "center", padding: 0 }}>×</button>
                   </div>
                 ))}
               </div>
             )}
             {data.galleryImages.length < 4 && (
-              <ImageUpload label="" value="" onChange={addImage} hint="Add a product/service image" ratio="1:1" />
+              <ImageUpload label="" value="" onChange={addImage} hint="Whole image is shown — no cropping." ratio="1:1" noCrop />
             )}
           </div>
 
