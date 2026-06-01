@@ -199,63 +199,88 @@ function CropModal({
   src: string; ratio: "16:9" | "1:1" | "4:1"; onCancel: () => void; onSave: (croppedDataUrl: string) => void;
 }) {
   const ar = ratio === "4:1" ? 4 : ratio === "1:1" ? 1 : 16 / 9;
-  // Frame dimensions inside the modal
   const FRAME_W = 440;
   const FRAME_H = Math.round(FRAME_W / ar);
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [natural, setNatural] = useState({ w: 0, h: 0 });
-  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // Base scale = cover the frame at zoom 1
-  const baseScale = natural.w && natural.h ? Math.max(FRAME_W / natural.w, FRAME_H / natural.h) : 1;
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  const [zoom, setZoom] = useState(1);
+  // pos = pixel coordinates of the image's top-left corner, relative to the frame's top-left.
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ mx: number; my: number; px: number; py: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const ready = natural.w > 0 && natural.h > 0;
+
+  // Base scale = smallest scale that still covers the frame (so no empty gaps at zoom 1).
+  const baseScale = ready ? Math.max(FRAME_W / natural.w, FRAME_H / natural.h) : 1;
   const scale = baseScale * zoom;
   const dispW = natural.w * scale;
   const dispH = natural.h * scale;
 
-  // Clamp offset so the frame is always covered
-  const clamp = (x: number, y: number) => {
-    const maxX = Math.max(0, (dispW - FRAME_W) / 2);
-    const maxY = Math.max(0, (dispH - FRAME_H) / 2);
-    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
-  };
+  // Clamp so the image always fully covers the frame (top-left can't go positive,
+  // bottom-right can't expose gaps).
+  const clamp = (x: number, y: number) => ({
+    x: Math.min(0, Math.max(FRAME_W - dispW, x)),
+    y: Math.min(0, Math.max(FRAME_H - dispH, y)),
+  });
+
+  const centerPos = (s: number) => ({
+    x: (FRAME_W - natural.w * s) / 2,
+    y: (FRAME_H - natural.h * s) / 2,
+  });
 
   const onImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
-    setNatural({ w: img.naturalWidth, h: img.naturalHeight });
     imgRef.current = img;
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    setNatural({ w: nw, h: nh });
+    const s = Math.max(FRAME_W / nw, FRAME_H / nh);
+    setPos({ x: (FRAME_W - nw * s) / 2, y: (FRAME_H - nh * s) / 2 }); // centered
   };
 
   const onDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    drag.current = { mx: e.clientX, my: e.clientY, px: pos.x, py: pos.y };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
   const onMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
-    const nx = drag.current.ox + (e.clientX - drag.current.x);
-    const ny = drag.current.oy + (e.clientY - drag.current.y);
-    setOffset(clamp(nx, ny));
+    const nx = drag.current.px + (e.clientX - drag.current.mx);
+    const ny = drag.current.py + (e.clientY - drag.current.my);
+    setPos(clamp(nx, ny));
   };
   const onUp = () => { drag.current = null; };
 
+  const onZoom = (z: number) => {
+    // Keep the frame center anchored while zooming.
+    const oldS = baseScale * zoom;
+    const newS = baseScale * z;
+    const cx = FRAME_W / 2, cy = FRAME_H / 2;
+    // image-space point under the frame center, preserved across zoom
+    const ix = (cx - pos.x) / oldS;
+    const iy = (cy - pos.y) / oldS;
+    const nx = cx - ix * newS;
+    const ny = cy - iy * newS;
+    setZoom(z);
+    // clamp with the NEW display size
+    const ndW = natural.w * newS, ndH = natural.h * newS;
+    setPos({
+      x: Math.min(0, Math.max(FRAME_W - ndW, nx)),
+      y: Math.min(0, Math.max(FRAME_H - ndH, ny)),
+    });
+  };
+
   const handleSave = () => {
     const img = imgRef.current;
-    if (!img || !natural.w) { onSave(src); return; }
-    // Output at a good resolution: frame size × 2 (capped to source)
-    const outScale = 2;
+    if (!img || !ready) { onSave(src); return; }
+    const outScale = 2; // crisp output
     const canvas = document.createElement("canvas");
     canvas.width = FRAME_W * outScale;
     canvas.height = FRAME_H * outScale;
     const ctx = canvas.getContext("2d");
     if (!ctx) { onSave(src); return; }
-    // Map frame center to source coordinates
-    // top-left of displayed image relative to frame center:
-    const imgLeft = -dispW / 2 + offset.x;
-    const imgTop = -dispH / 2 + offset.y;
-    // Source rect that maps to the frame
-    const sx = (-imgLeft - FRAME_W / 2) / scale + natural.w / 2;
-    const sy = (-imgTop - FRAME_H / 2) / scale + natural.h / 2;
+    // The frame's top-left in image (natural) coordinates:
+    //   frameLeft_in_image = (0 - pos.x) / scale
+    const sx = (0 - pos.x) / scale;
+    const sy = (0 - pos.y) / scale;
     const sw = FRAME_W / scale;
     const sh = FRAME_H / scale;
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
@@ -279,26 +304,27 @@ function CropModal({
               cursor: "grab", touchAction: "none", userSelect: "none",
             }}
           >
-            <img
-              src={src} alt="crop" onLoad={onImgLoad} draggable={false}
-              style={{
-                position: "absolute", left: "50%", top: "50%",
-                width: dispW || "auto", height: dispH || "auto",
-                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
-                maxWidth: "none", pointerEvents: "none",
-              }}
-            />
-            {/* Frame guide */}
-            <div style={{ position: "absolute", inset: 0, boxShadow: "0 0 0 9999px rgba(0,0,0,0)", border: `2px solid rgba(255,255,255,0.9)`, borderRadius: radius.md, pointerEvents: "none" }} />
+            {/* hidden loader to get natural size before first paint */}
+            {!ready && <img src={src} alt="" onLoad={onImgLoad} style={{ position: "absolute", opacity: 0, pointerEvents: "none" }} />}
+            {ready && (
+              <img
+                ref={imgRef} src={src} alt="crop" draggable={false}
+                style={{
+                  position: "absolute", left: pos.x, top: pos.y,
+                  width: dispW, height: dispH, maxWidth: "none", pointerEvents: "none",
+                }}
+              />
+            )}
+            <div style={{ position: "absolute", inset: 0, border: `2px solid rgba(255,255,255,0.9)`, borderRadius: radius.md, pointerEvents: "none" }} />
             <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, padding: "3px 8px", borderRadius: radius.sm, pointerEvents: "none" }}>⤢ drag to reposition</div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
             <span style={{ fontSize: 16, color: C.textMuted }}>−</span>
-            <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={e => { setZoom(parseFloat(e.target.value)); setOffset(o => clamp(o.x, o.y)); }} style={{ flex: 1 }} />
+            <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={e => onZoom(parseFloat(e.target.value))} style={{ flex: 1 }} />
             <span style={{ fontSize: 16, color: C.textMuted }}>+</span>
             <span style={{ fontSize: 12, color: C.textMuted, minWidth: 40, textAlign: "right" }}>{Math.round(zoom * 100)}%</span>
-            <button onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} style={{ fontSize: 12, padding: "6px 10px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.sm, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Reset</button>
+            <button onClick={() => { setZoom(1); setPos(centerPos(baseScale)); }} style={{ fontSize: 12, padding: "6px 10px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.sm, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Reset</button>
           </div>
         </div>
 
