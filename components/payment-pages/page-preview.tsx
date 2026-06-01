@@ -77,47 +77,47 @@ function DesktopPreview(p: PreviewProps) {
   return (
     <div style={{ background: pageBg, width: "100%", minHeight: "100%", fontFamily: font, padding: "20px 16px 32px" }}>
       <div style={{ maxWidth: maxW, margin: "0 auto" }}>
-        {/* ── Top brand banner ─────────────────────────────────────── */}
+        {/* ── Optional banner masthead (full-width, only when uploaded) ── */}
+        {data.coverImage && (
+          <div style={{
+            height: 110,
+            backgroundImage: `url(${data.coverImage})`,
+            backgroundSize: `${(data as any).coverZoom ?? 100}%`,
+            backgroundPosition: `center ${(data as any).coverPosition ?? 50}%`,
+            backgroundRepeat: "no-repeat",
+            borderRadius: `${radius.lg}px ${radius.lg}px 0 0`,
+            borderBottom: `1px solid ${border}`,
+          }} />
+        )}
+
+        {/* ── Clean header: logo + merchant name (no "Paying to") ────── */}
         <div style={{
-          background: data.brandColor, borderRadius: `${radius.lg}px ${radius.lg}px 0 0`,
-          padding: "18px 28px", display: "flex", alignItems: "center", gap: 14,
-          color: onBrand,
+          background: cardBg,
+          borderRadius: data.coverImage ? 0 : `${radius.lg}px ${radius.lg}px 0 0`,
+          borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
+          borderTop: data.coverImage ? "none" : `1px solid ${border}`,
+          padding: "18px 28px 14px", display: "flex", alignItems: "center", gap: 12,
         }}>
           {data.showLogo && (
-            <div style={{ width: 36, height: 36, background: hexAlpha("#ffffff", 0.18), borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, fontWeight: 800, overflow: "hidden" }}>
+            <div style={{ width: 38, height: 38, background: data.brandColor, color: onBrand, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15, fontWeight: 800, overflow: "hidden" }}>
               {(data as any).logoImage
                 ? <img src={(data as any).logoImage} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="logo" />
                 : (data.merchantName || "E").slice(0, 1).toUpperCase()}
             </div>
           )}
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 600, margin: 0, opacity: 0.8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Paying to</p>
-            <p style={{ fontSize: 16, fontWeight: 700, margin: "1px 0 0" }}>{data.merchantName || "Your Brand"}</p>
-          </div>
+          <span style={{ fontSize: 16, fontWeight: 700, color: text }}>{data.merchantName || "Your Brand"}</span>
         </div>
 
-        {/* Cover image (if uploaded) */}
-        {data.coverImage && (
-          <div style={{ height: 140, background: `url(${data.coverImage}) center/cover`, borderBottom: `1px solid ${border}` }} />
-        )}
-
-        {/* ── Product / Cause / Event / Invoice header ────────────── */}
-        <HeaderBlock data={data} cardBg={cardBg} subtleBg={subtleBg} text={text} textMuted={textMuted} border={border} total={total} />
+        {/* ── Product / Cause / Event / Invoice header (no floating total) ── */}
+        <HeaderBlock data={data} cardBg={cardBg} subtleBg={subtleBg} text={text} textMuted={textMuted} textFaint={textFaint} border={border} total={total} brandColor={data.brandColor} />
 
         {/* ── Two column body ──────────────────────────────────────── */}
         <div style={{
           background: cardBg, borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
           display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0,
         }}>
-          {/* LEFT: description, contact, social */}
+          {/* LEFT: contact, social, gallery (description now in header) */}
           <div style={{ padding: "24px 28px" }}>
-            {data.description && (
-              <div style={{ marginBottom: 22 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>About</p>
-                <p style={{ fontSize: 13, color: text, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>{data.description}</p>
-              </div>
-            )}
-
             {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Event Info</p>
@@ -211,13 +211,13 @@ function DesktopPreview(p: PreviewProps) {
         <div style={{
           background: cardBg, borderTop: `1px solid ${border}`,
           borderRadius: `0 0 ${radius.lg}px ${radius.lg}px`,
-          padding: "16px 28px", textAlign: "center",
+          padding: "14px 28px", textAlign: "center",
           border: `1px solid ${border}`, borderTopColor: border,
         }}>
-          <p style={{ fontSize: 10, color: textFaint, margin: "0 0 4px", letterSpacing: "0.06em" }}>POWERED BY</p>
-          <p style={{ fontSize: 14, fontWeight: 800, color: data.brandColor, margin: 0, letterSpacing: "-0.01em" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 16, height: 16, background: C.blue, borderRadius: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", color: C.white, fontSize: 10, fontWeight: 800 }}>E</span>
+          <p style={{ fontSize: 11, color: textFaint, margin: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            Powered by
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, color: text }}>
+              <span style={{ width: 15, height: 15, background: C.blue, borderRadius: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", color: C.white, fontSize: 9, fontWeight: 800 }}>E</span>
               EnKash
             </span>
           </p>
@@ -245,23 +245,24 @@ function MobilePreview(p: PreviewProps) {
   return (
     <div style={{ background: pageBg, width: "100%", minHeight: "100%", fontFamily: font, padding: "12px 10px" }}>
       <div style={{ background: cardBg, borderRadius: radius.lg, overflow: "hidden", border: `1px solid ${border}` }}>
-        {/* Brand banner */}
-        <div style={{ background: data.brandColor, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, color: onBrand }}>
+        {/* Optional banner masthead — fit whole image, never cropped on mobile */}
+        {data.coverImage && (
+          <div style={{ width: "100%", background: subtleBg, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <img src={data.coverImage} style={{ width: "100%", height: "auto", display: "block" }} alt="banner" />
+          </div>
+        )}
+
+        {/* Clean header: logo + merchant name (no "Paying to") */}
+        <div style={{ background: cardBg, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           {data.showLogo && (
-            <div style={{ width: 28, height: 28, background: hexAlpha("#ffffff", 0.18), borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, overflow: "hidden" }}>
+            <div style={{ width: 30, height: 30, background: data.brandColor, color: onBrand, borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, overflow: "hidden", flexShrink: 0 }}>
               {(data as any).logoImage
                 ? <img src={(data as any).logoImage} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="logo" />
                 : (data.merchantName || "E").slice(0, 1).toUpperCase()}
             </div>
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 9, fontWeight: 600, margin: 0, opacity: 0.8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Paying to</p>
-            <p style={{ fontSize: 13, fontWeight: 700, margin: "1px 0 0" }}>{data.merchantName || "Your Brand"}</p>
-          </div>
-          <p style={{ fontSize: 13, fontWeight: 800, margin: 0, opacity: 0.95 }}>{total}</p>
+          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{data.merchantName || "Your Brand"}</span>
         </div>
-
-        {data.coverImage && <div style={{ height: 90, background: `url(${data.coverImage}) center/cover` }} />}
 
         {/* Tab switcher */}
         <div style={{ display: "flex", borderBottom: `1px solid ${border}` }}>
@@ -348,18 +349,21 @@ function MobilePreview(p: PreviewProps) {
 // Header (product / cause / event / invoice)
 // ──────────────────────────────────────────────────────────────────────────────
 function HeaderBlock({
-  data, cardBg, subtleBg, text, textMuted, border, total, compact,
-}: { data: WizardData; cardBg: string; subtleBg: string; text: string; textMuted: string; border: string; total: string; compact?: boolean }) {
+  data, cardBg, subtleBg, text, textMuted, textFaint, border, total, compact, brandColor,
+}: { data: WizardData; cardBg: string; subtleBg: string; text: string; textMuted: string; textFaint?: string; border: string; total: string; compact?: boolean; brandColor?: string }) {
   return (
     <div style={{
-      background: subtleBg, borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}`,
-      padding: compact ? "12px 16px" : "18px 28px", display: "flex", alignItems: "center", gap: compact ? 12 : 16,
+      background: cardBg, borderTop: "none", borderBottom: `1px solid ${border}`,
+      borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
+      padding: compact ? "0 16px 12px" : "0 28px 18px", display: "flex", alignItems: "flex-start", gap: compact ? 12 : 16,
     }}>
       {data.productImage && data.pageType === "page" && data.amountType === "fixed" && (
         <div style={{ width: compact ? 44 : 56, height: compact ? 44 : 56, borderRadius: radius.sm, background: `url(${data.productImage}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: compact ? 14 : 16, fontWeight: 700, color: text, margin: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {/* Brand accent rule */}
+        <div style={{ width: 30, height: 3, background: brandColor || data.brandColor, marginBottom: 8 }} />
+        <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, color: text, margin: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
           {data.title || (
             data.pageType === "invoice" ? "Invoice"
               : (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
@@ -370,12 +374,9 @@ function HeaderBlock({
         {data.pageType === "page" && data.amountType === "customer" && data.isDonation && (
           <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>Every contribution counts</p>
         )}
-      </div>
-      <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <p style={{ fontSize: 10, fontWeight: 600, color: textMuted, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {data.pageType === "invoice" ? "Total Due" : (data.amountType === "customer" && data.isDonation) ? "Donation" : "Total Amount"}
-        </p>
-        <p style={{ fontSize: compact ? 16 : 18, fontWeight: 800, color: text, margin: "2px 0 0" }}>{total}</p>
+        {data.description && (
+          <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{data.description}</p>
+        )}
       </div>
     </div>
   );
@@ -420,6 +421,22 @@ function BillingPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* ── Order summary card (mode-relative elevation surface) ── */}
+      <div style={{ marginBottom: 4 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Order summary</p>
+        <div style={{ background: subtleBg, border: `1px solid ${border}`, borderRadius: radius.md, padding: "12px 14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontSize: 12, color: textMuted }}>
+              {isInvoice ? "Total due" : isDonationFlow ? "Your donation" : "Total payable"}
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: text }}>{total}</span>
+          </div>
+          {isInvoice && parseFloat(data.taxPercent || "0") > 0 && (
+            <p style={{ fontSize: 11, color: textFaint, margin: "4px 0 0" }}>Incl. {data.taxPercent}% tax</p>
+          )}
+        </div>
+      </div>
+
       <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
         {amountLabel}
       </p>
@@ -468,7 +485,7 @@ function BillingPanel({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
                 <span style={{ fontSize: 13, color: textMuted, padding: "0 4px" }}>−</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{i === 0 ? "1" : "0"}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{"0"}</span>
                 <span style={{ fontSize: 13, color: data.brandColor, padding: "0 4px" }}>+</span>
               </div>
             </div>
@@ -490,12 +507,12 @@ function BillingPanel({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{it.label || `Item ${i + 1}`}</p>
                 <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>
-                  {symbol}{it.amount || "0"}{it.description ? ` · ${it.description.slice(0, 40)}${it.description.length > 40 ? "…" : ""}` : ""}
+                  {symbol}{it.amount || "0"}
                 </p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
                 <span style={{ fontSize: 13, color: textMuted, padding: "0 4px" }}>−</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{i === 0 ? "1" : "0"}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{"0"}</span>
                 <span style={{ fontSize: 13, color: data.brandColor, padding: "0 4px" }}>+</span>
               </div>
             </div>
@@ -563,9 +580,9 @@ function BillingPanel({
         {data.buttonLabel || "Pay Securely"} {total}
       </button>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10 }}>🔒</span>
-        <span style={{ fontSize: 10, color: textFaint }}>100% Secure payment</span>
+        <span style={{ fontSize: 10, color: textFaint, fontWeight: 600, letterSpacing: "0.02em" }}>UPI · Visa · Mastercard · PCI compliant</span>
       </div>
     </div>
   );
