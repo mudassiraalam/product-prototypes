@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import type { WizardData } from "./wizard-steps";
 import { getSymbol } from "./wizard-steps";
@@ -34,6 +34,11 @@ export function PagePreview({
 }: {
   data: WizardData; device?: "desktop" | "mobile";
 }) {
+  // Live, interactive item quantities (multiple-items / tickets). Start at 0.
+  const [quantities, setQuantities] = useState<Record<number, number>>({});
+  const setQty = (i: number, delta: number) =>
+    setQuantities(prev => ({ ...prev, [i]: Math.max(0, (prev[i] ?? 0) + delta) }));
+
   const systemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = data.theme === "dark" || (data.theme === "system" && systemDark);
   const pageBg = dark ? "#0b1220" : "#f4f6fb";
@@ -46,7 +51,7 @@ export function PagePreview({
   const font = FONT_MAP[data.fontStyle];
   const onBrand = isDark(data.brandColor) ? "#ffffff" : "#0f172a";
   const btnRadius = data.buttonStyle === "pill" ? 999 : data.buttonStyle === "sharp" ? 4 : 10;
-  const total = computeTotal(data);
+  const total = computeTotalLive(data, quantities);
 
   if (device === "mobile") {
     return (
@@ -54,6 +59,7 @@ export function PagePreview({
         data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
         text={text} textMuted={textMuted} textFaint={textFaint} border={border}
         font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
+        quantities={quantities} setQty={setQty}
       />
     );
   }
@@ -63,6 +69,7 @@ export function PagePreview({
       data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
       text={text} textMuted={textMuted} textFaint={textFaint} border={border}
       font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
+      quantities={quantities} setQty={setQty}
     />
   );
 }
@@ -80,11 +87,9 @@ function DesktopPreview(p: PreviewProps) {
         {/* ── Optional banner masthead (full-width, only when uploaded) ── */}
         {data.coverImage && (
           <div style={{
-            height: 110,
+            width: "100%", aspectRatio: "4 / 1",
             backgroundImage: `url(${data.coverImage})`,
-            backgroundSize: `${(data as any).coverZoom ?? 100}%`,
-            backgroundPosition: `center ${(data as any).coverPosition ?? 50}%`,
-            backgroundRepeat: "no-repeat",
+            backgroundSize: "cover", backgroundPosition: "center",
             borderRadius: `${radius.lg}px ${radius.lg}px 0 0`,
             borderBottom: `1px solid ${border}`,
           }} />
@@ -99,7 +104,7 @@ function DesktopPreview(p: PreviewProps) {
           padding: "18px 28px 14px", display: "flex", alignItems: "center", gap: 12,
         }}>
           {data.showLogo && (
-            <div style={{ width: 38, height: 38, background: data.brandColor, color: onBrand, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15, fontWeight: 800, overflow: "hidden" }}>
+            <div style={{ width: 38, height: 38, background: (data as any).logoImage ? "#ffffff" : data.brandColor, color: onBrand, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15, fontWeight: 800, overflow: "hidden", border: (data as any).logoImage ? `1px solid ${border}` : "none" }}>
               {(data as any).logoImage
                 ? <img src={(data as any).logoImage} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="logo" />
                 : (data.merchantName || "E").slice(0, 1).toUpperCase()}
@@ -116,8 +121,15 @@ function DesktopPreview(p: PreviewProps) {
           background: cardBg, borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
           display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0,
         }}>
-          {/* LEFT: contact, social, gallery (description now in header) */}
+          {/* LEFT: full description, contact, social, gallery */}
           <div style={{ padding: "24px 28px" }}>
+            {data.longDescription && (
+              <div style={{ marginBottom: 22 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>About</p>
+                <p style={{ fontSize: 13, color: text, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>{data.longDescription}</p>
+              </div>
+            )}
+
             {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Event Info</p>
@@ -178,7 +190,7 @@ function DesktopPreview(p: PreviewProps) {
               </div>
             )}
 
-            {!data.description && !data.contactEmail && !data.contactPhone && !data.socialTwitter && !data.socialInstagram && !data.socialFacebook && !data.socialLinkedin && !(data as any).galleryImages?.length && (
+            {!data.longDescription && !data.contactEmail && !data.contactPhone && !data.socialTwitter && !data.socialInstagram && !data.socialFacebook && !data.socialLinkedin && !(data as any).galleryImages?.length && (
               <div style={{ background: subtleBg, border: `1px dashed ${border}`, borderRadius: radius.md, padding: "20px 16px", textAlign: "center" }}>
                 <p style={{ fontSize: 20, margin: "0 0 8px" }}>
                   {data.pageType === "invoice" ? "🧾" : (data.amountType === "customer" && data.isDonation) ? "🤝" : (data.amountType === "multiple" && data.itemsAreTickets) ? "🎟️" : "🛍️"}
@@ -202,7 +214,7 @@ function DesktopPreview(p: PreviewProps) {
             <BillingPanel
               data={data} text={text} textMuted={textMuted} textFaint={textFaint}
               border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
-              total={total}
+              total={total} quantities={p.quantities} setQty={p.setQty}
             />
           </div>
         </div>
@@ -255,7 +267,7 @@ function MobilePreview(p: PreviewProps) {
         {/* Clean header: logo + merchant name (no "Paying to") */}
         <div style={{ background: cardBg, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           {data.showLogo && (
-            <div style={{ width: 30, height: 30, background: data.brandColor, color: onBrand, borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, overflow: "hidden", flexShrink: 0 }}>
+            <div style={{ width: 30, height: 30, background: (data as any).logoImage ? "#ffffff" : data.brandColor, color: onBrand, borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, overflow: "hidden", flexShrink: 0, border: (data as any).logoImage ? `1px solid ${border}` : "none" }}>
               {(data as any).logoImage
                 ? <img src={(data as any).logoImage} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="logo" />
                 : (data.merchantName || "E").slice(0, 1).toUpperCase()}
@@ -275,8 +287,8 @@ function MobilePreview(p: PreviewProps) {
           <div style={{ padding: "14px 16px" }}>
             <p style={{ fontSize: 15, fontWeight: 800, color: text, margin: "0 0 6px" }}>{data.title || "Page Title"}</p>
 
-            {data.description && (
-              <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, margin: "0 0 14px", whiteSpace: "pre-wrap" }}>{data.description}</p>
+            {data.longDescription && (
+              <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, margin: "0 0 14px", whiteSpace: "pre-wrap" }}>{data.longDescription}</p>
             )}
 
             {(data as any).galleryImages?.length > 0 && (
@@ -310,7 +322,7 @@ function MobilePreview(p: PreviewProps) {
               </div>
             )}
 
-            {!data.description && !(data as any).galleryImages?.length && !data.contactEmail && !data.contactPhone && (
+            {!data.longDescription && !(data as any).galleryImages?.length && !data.contactEmail && !data.contactPhone && (
               <div style={{ textAlign: "center", padding: "20px 0", color: textFaint, fontSize: 12 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 20 }}>🛍️</p>
                 <p style={{ margin: 0 }}>Fill in Step 1 to see your page info here</p>
@@ -331,7 +343,7 @@ function MobilePreview(p: PreviewProps) {
               <BillingPanel
                 data={data} text={text} textMuted={textMuted} textFaint={textFaint}
                 border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
-                total={total} compact
+                total={total} compact quantities={p.quantities} setQty={p.setQty}
               />
             </div>
           </div>
@@ -386,11 +398,14 @@ function HeaderBlock({
 // Billing panel — type-aware
 // ──────────────────────────────────────────────────────────────────────────────
 function BillingPanel({
-  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact,
+  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty,
 }: {
   data: WizardData; text: string; textMuted: string; textFaint: string; border: string;
   subtleBg: string; onBrand: string; btnRadius: number; total: string; compact?: boolean;
+  quantities?: Record<number, number>; setQty?: (i: number, delta: number) => void;
 }) {
+  const qty = quantities ?? {};
+  const bump = setQty ?? (() => {});
   const symbol = getSymbol(data.currency);
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: compact ? "9px 11px" : "10px 13px", border: `1px solid ${border}`,
@@ -484,9 +499,9 @@ function BillingPanel({
                 <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} seats` : ""}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
-                <span style={{ fontSize: 13, color: textMuted, padding: "0 4px" }}>−</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{"0"}</span>
-                <span style={{ fontSize: 13, color: data.brandColor, padding: "0 4px" }}>+</span>
+                <button onClick={() => bump(i, -1)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{qty[i] ?? 0}</span>
+                <button onClick={() => bump(i, 1)} style={{ fontSize: 15, color: data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>+</button>
               </div>
             </div>
           ))}
@@ -511,9 +526,9 @@ function BillingPanel({
                 </p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
-                <span style={{ fontSize: 13, color: textMuted, padding: "0 4px" }}>−</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{"0"}</span>
-                <span style={{ fontSize: 13, color: data.brandColor, padding: "0 4px" }}>+</span>
+                <button onClick={() => bump(i, -1)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{qty[i] ?? 0}</span>
+                <button onClick={() => bump(i, 1)} style={{ fontSize: 15, color: data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>+</button>
               </div>
             </div>
           ))}
@@ -629,6 +644,20 @@ interface PreviewProps {
   pageBg: string; cardBg: string; subtleBg: string;
   text: string; textMuted: string; textFaint: string; border: string;
   font: string; onBrand: string; btnRadius: number; total: string;
+  quantities?: Record<number, number>;
+  setQty?: (i: number, delta: number) => void;
+}
+
+// Live total that respects buyer-selected quantities (multiple-items / tickets).
+function computeTotalLive(data: WizardData, quantities: Record<number, number>): string {
+  const sym = getSymbol(data.currency);
+  if (data.amountType === "multiple") {
+    const items = data.items.filter(it => it.label || it.amount);
+    const list = items.length ? items : data.items;
+    const sum = list.reduce((acc, it, i) => acc + parseFloat(it.amount || "0") * (quantities[i] ?? 0), 0);
+    return sum > 0 ? `${sym}${sum.toFixed(2)}` : `${sym}0.00`;
+  }
+  return computeTotal(data);
 }
 
 function computeTotal(data: WizardData): string {
