@@ -82,8 +82,8 @@ function DesktopPreview(p: PreviewProps) {
   const maxW = data.layout === "wide" ? 940 : 820;
 
   return (
-    <div style={{ background: pageBg, width: "100%", minHeight: "100%", fontFamily: font, padding: "20px 16px 32px" }}>
-      <div style={{ maxWidth: maxW, margin: "0 auto" }}>
+    <div style={{ background: "#f4f6fb", width: "100%", minHeight: "100%", fontFamily: font, padding: "20px 16px 32px" }}>
+      <div style={{ maxWidth: maxW, margin: "0 auto", background: pageBg, borderRadius: radius.lg, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
         {/* ── Optional banner masthead (full-width, only when uploaded) ── */}
         {data.coverImage && (
           <div style={{
