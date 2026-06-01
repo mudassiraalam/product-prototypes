@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { C, radius } from "./tokens";
+import { C, radius, shadow } from "./tokens";
 import { Inp, Textarea, Sel, Toggle, ColorPicker, SegmentedControl, InfoBanner, SectionCard, Label, Btn } from "./primitives";
 
 export type PageType = "page" | "invoice";
@@ -34,6 +34,7 @@ export interface WizardData {
   merchantName: string;
   title: string;
   description: string;
+  longDescription: string;
   pageSlug: string;
   coverImage: string;
   coverPosition: number;
@@ -113,6 +114,7 @@ export const DEFAULT_WIZARD: WizardData = {
   merchantName: "EnKash Demo",
   title: "",
   description: "",
+  longDescription: "",
   pageSlug: "",
   coverImage: "",
   coverPosition: 50,
@@ -190,80 +192,169 @@ const FIELD_TYPES = [
   { value: "number", label: "Number" }, { value: "dropdown", label: "Dropdown" },
 ];
 
-// ── Image Upload ──────────────────────────────────────────────────────────────
+// ── Crop Modal (LinkedIn-style: frame + zoom + drag, bakes crop to canvas) ──────
+function CropModal({
+  src, ratio, onCancel, onSave,
+}: {
+  src: string; ratio: "16:9" | "1:1" | "4:1"; onCancel: () => void; onSave: (croppedDataUrl: string) => void;
+}) {
+  const ar = ratio === "4:1" ? 4 : ratio === "1:1" ? 1 : 16 / 9;
+  // Frame dimensions inside the modal
+  const FRAME_W = 440;
+  const FRAME_H = Math.round(FRAME_W / ar);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Base scale = cover the frame at zoom 1
+  const baseScale = natural.w && natural.h ? Math.max(FRAME_W / natural.w, FRAME_H / natural.h) : 1;
+  const scale = baseScale * zoom;
+  const dispW = natural.w * scale;
+  const dispH = natural.h * scale;
+
+  // Clamp offset so the frame is always covered
+  const clamp = (x: number, y: number) => {
+    const maxX = Math.max(0, (dispW - FRAME_W) / 2);
+    const maxY = Math.max(0, (dispH - FRAME_H) / 2);
+    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
+  };
+
+  const onImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+    imgRef.current = img;
+  };
+
+  const onDown = (e: React.PointerEvent) => {
+    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    const nx = drag.current.ox + (e.clientX - drag.current.x);
+    const ny = drag.current.oy + (e.clientY - drag.current.y);
+    setOffset(clamp(nx, ny));
+  };
+  const onUp = () => { drag.current = null; };
+
+  const handleSave = () => {
+    const img = imgRef.current;
+    if (!img || !natural.w) { onSave(src); return; }
+    // Output at a good resolution: frame size × 2 (capped to source)
+    const outScale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = FRAME_W * outScale;
+    canvas.height = FRAME_H * outScale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { onSave(src); return; }
+    // Map frame center to source coordinates
+    // top-left of displayed image relative to frame center:
+    const imgLeft = -dispW / 2 + offset.x;
+    const imgTop = -dispH / 2 + offset.y;
+    // Source rect that maps to the frame
+    const sx = (-imgLeft - FRAME_W / 2) / scale + natural.w / 2;
+    const sy = (-imgTop - FRAME_H / 2) / scale + natural.h / 2;
+    const sw = FRAME_W / scale;
+    const sh = FRAME_H / scale;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    onSave(canvas.toDataURL("image/jpeg", 0.9));
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: C.white, borderRadius: radius.lg, width: "min(520px, 100%)", overflow: "hidden", boxShadow: shadow.lg }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Edit photo</p>
+          <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: C.textMuted, fontFamily: "inherit", lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ padding: 18 }}>
+          <div
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
+            style={{
+              position: "relative", width: FRAME_W, height: FRAME_H, margin: "0 auto",
+              overflow: "hidden", borderRadius: radius.md, background: "#0f172a",
+              cursor: "grab", touchAction: "none", userSelect: "none",
+            }}
+          >
+            <img
+              src={src} alt="crop" onLoad={onImgLoad} draggable={false}
+              style={{
+                position: "absolute", left: "50%", top: "50%",
+                width: dispW || "auto", height: dispH || "auto",
+                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+                maxWidth: "none", pointerEvents: "none",
+              }}
+            />
+            {/* Frame guide */}
+            <div style={{ position: "absolute", inset: 0, boxShadow: "0 0 0 9999px rgba(0,0,0,0)", border: `2px solid rgba(255,255,255,0.9)`, borderRadius: radius.md, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, padding: "3px 8px", borderRadius: radius.sm, pointerEvents: "none" }}>⤢ drag to reposition</div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
+            <span style={{ fontSize: 16, color: C.textMuted }}>−</span>
+            <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={e => { setZoom(parseFloat(e.target.value)); setOffset(o => clamp(o.x, o.y)); }} style={{ flex: 1 }} />
+            <span style={{ fontSize: 16, color: C.textMuted }}>+</span>
+            <span style={{ fontSize: 12, color: C.textMuted, minWidth: 40, textAlign: "right" }}>{Math.round(zoom * 100)}%</span>
+            <button onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} style={{ fontSize: 12, padding: "6px 10px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.sm, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Reset</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 18px", borderTop: `1px solid ${C.border}` }}>
+          <Btn variant="secondary" size="sm" onClick={onCancel}>Cancel</Btn>
+          <Btn size="sm" onClick={handleSave}>Save</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Image Upload (opens crop modal, stores the cropped result — WYSIWYG) ────────
 function ImageUpload({
-  label, value, onChange, hint, ratio = "16:9", position, onPositionChange, zoom, onZoomChange,
+  label, value, onChange, hint, ratio = "16:9",
 }: {
   label: string; value: string; onChange: (v: string) => void; hint?: string; ratio?: "16:9" | "1:1" | "4:1";
+  // legacy props accepted but unused (crop is baked into the image now)
   position?: number; onPositionChange?: (p: number) => void;
   zoom?: number; onZoomChange?: (z: number) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const aspect = ratio === "16:9" ? "16 / 9" : ratio === "4:1" ? "4 / 1" : "1 / 1";
-  const repositionable = onPositionChange !== undefined;
-  const pos = position ?? 50;
-  const zm = zoom ?? 100;
   const [error, setError] = useState<string>("");
   const [lowRes, setLowRes] = useState(false);
-  const dragRef = useRef<{ startY: number; startPos: number } | null>(null);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
 
-  const MAX_BYTES = 2 * 1024 * 1024; // 2MB
+  const MAX_BYTES = 2 * 1024 * 1024;
   const MIN_WIDTH = ratio === "4:1" ? 1200 : ratio === "1:1" ? 256 : 800;
 
   const handleFile = (file: File) => {
-    setError("");
-    setLowRes(false);
-    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
-      setError("Please upload a PNG or JPG image.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setError("Image is larger than 2MB. Please upload a smaller file.");
-      return;
-    }
+    setError(""); setLowRes(false);
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) { setError("Please upload a PNG or JPG image."); return; }
+    if (file.size > MAX_BYTES) { setError("Image is larger than 2MB. Please upload a smaller file."); return; }
     const reader = new FileReader();
     reader.onload = e => {
       const src = (e.target?.result as string) ?? "";
-      // Low-resolution check
       const img = new Image();
       img.onload = () => { if (img.naturalWidth < MIN_WIDTH) setLowRes(true); };
       img.src = src;
-      onChange(src);
+      setCropSrc(src); // open the crop modal
     };
     reader.readAsDataURL(file);
   };
-
-  // Drag to reposition (vertical), only when repositionable and an image exists
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!repositionable || !value) return;
-    dragRef.current = { startY: e.clientY, startPos: pos };
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current || !onPositionChange) return;
-    const dy = e.clientY - dragRef.current.startY;
-    const next = Math.max(0, Math.min(100, dragRef.current.startPos + (dy / 1.5)));
-    onPositionChange(Math.round(next));
-  };
-  const onPointerUp = () => { dragRef.current = null; };
 
   return (
     <div style={{ marginBottom: 18 }}>
       {label && <Label>{label}</Label>}
       <div
         onClick={() => { if (!value) inputRef.current?.click(); }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
         style={{
           width: "100%", aspectRatio: aspect, border: `1.5px dashed ${value ? C.blueMid : C.border}`,
-          borderRadius: radius.md, background: value ? "transparent" : C.bg,
-          cursor: value ? (repositionable ? "grab" : "default") : "pointer",
+          borderRadius: radius.md, background: value ? "transparent" : C.bg, cursor: value ? "default" : "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-          backgroundImage: value ? `url(${value})` : "none",
-          backgroundSize: value ? `${zm}%` : "cover",
-          backgroundPosition: `center ${pos}%`, backgroundRepeat: "no-repeat",
-          position: "relative", transition: "border-color 0.15s", touchAction: "none",
+          backgroundImage: value ? `url(${value})` : "none", backgroundSize: "cover", backgroundPosition: "center",
+          position: "relative", transition: "border-color 0.15s",
         }}
       >
         {!value && (
@@ -273,47 +364,42 @@ function ImageUpload({
             <p style={{ fontSize: 10, margin: "2px 0 0", color: C.textFaint }}>PNG, JPG up to 2MB</p>
           </div>
         )}
-        {value && repositionable && (
-          <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: C.white, fontSize: 10, padding: "3px 8px", borderRadius: radius.sm, pointerEvents: "none" }}>
-            ⤢ drag to reposition
-          </div>
-        )}
         {value && (
-          <button
-            onClick={e => { e.stopPropagation(); onChange(""); setError(""); setLowRes(false); }}
-            style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
-          >
-            Remove
-          </button>
+          <>
+            <button
+              onClick={e => { e.stopPropagation(); setCropSrc(value); }}
+              style={{ position: "absolute", top: 8, right: 80, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
+            >
+              Reposition
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onChange(""); setError(""); setLowRes(false); }}
+              style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
+            >
+              Remove
+            </button>
+          </>
         )}
       </div>
-
-      {/* Zoom slider (only when image + zoom control wired) */}
-      {value && repositionable && onZoomChange && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-          <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Zoom</span>
-          <input type="range" min={100} max={250} value={zm} onChange={e => onZoomChange(parseInt(e.target.value))} style={{ flex: 1 }} />
-          <button
-            onClick={() => { onPositionChange?.(50); onZoomChange(100); }}
-            style={{ fontSize: 11, padding: "4px 8px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.sm, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}
-          >
-            Reset
-          </button>
-        </div>
-      )}
 
       {error && <p style={{ fontSize: 11, color: C.red, margin: "6px 0 0" }}>{error}</p>}
       {lowRes && !error && (
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginTop: 6, padding: "8px 10px", background: C.amberBg, borderRadius: radius.sm }}>
           <span style={{ fontSize: 12 }}>⚠</span>
-          <p style={{ fontSize: 11, color: C.amber, margin: 0, lineHeight: 1.5 }}>This image is smaller than recommended and may look blurry when displayed. Use a wider image for best results.</p>
+          <p style={{ fontSize: 11, color: C.amber, margin: 0, lineHeight: 1.5 }}>This image is smaller than recommended and may look blurry. Use a larger image for best results.</p>
         </div>
       )}
-      <input
-        ref={inputRef} type="file" accept="image/png,image/jpeg" hidden
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-      />
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg" hidden onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.currentTarget.value = ""; }} />
       {hint && <p style={{ fontSize: 12, color: C.textFaint, margin: "6px 0 0", lineHeight: 1.5 }}>{hint}</p>}
+
+      {cropSrc && (
+        <CropModal
+          src={cropSrc}
+          ratio={ratio}
+          onCancel={() => setCropSrc(null)}
+          onSave={(cropped) => { onChange(cropped); setCropSrc(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -343,6 +429,18 @@ function PageInfoSection({ data, setData }: { data: WizardData; setData: (d: Wiz
 
       {open && (
         <div style={{ marginTop: 16 }}>
+          {/* Full description — features, about the company, anything the merchant wants */}
+          <div style={{ marginBottom: 14 }}>
+            <Textarea
+              label="Full Description"
+              value={data.longDescription}
+              onChange={v => setData({ ...data, longDescription: v })}
+              placeholder={"Tell customers about your product, features, your company — anything you want them to know.\n\n• Feature one\n• Feature two\n• Why choose us"}
+              rows={6}
+              hint="Shown in the left column of your page. Supports line breaks and lists."
+            />
+          </div>
+
           {/* Contact */}
           <div style={{ marginBottom: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Contact (shown on page)</p>
@@ -555,7 +653,7 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
 
       <SectionCard title="Basics">
         <Inp label="Page Title" value={data.title} onChange={v => setData({ ...data, title: v })} placeholder="e.g. Bluetooth Headphones" required />
-        <Textarea label="Description" value={data.description} onChange={v => setData({ ...data, description: v })} placeholder="Describe what your customers are paying for..." rows={4} hint="Maximum 500 characters" />
+        <Textarea label="Short Description" value={data.description} onChange={v => setData({ ...data, description: v })} placeholder="A one-line summary shown under your page title." rows={2} hint="Keep it short — a sentence or two. Add a full description with features in Page Info below." />
       </SectionCard>
 
       <SectionCard title="Pricing">
@@ -770,7 +868,10 @@ export function StepInvoiceDetails({ data, setData }: { data: WizardData; setDat
 // ──────────────────────────────────────────────────────────────────────────────
 export function StepCustomerFields({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   const updateField = (i: number, patch: Partial<typeof data.customerFields[0]>) => {
-    const arr = [...data.customerFields]; arr[i] = { ...arr[i], ...patch };
+    const arr = [...data.customerFields];
+    const merged = { ...arr[i], ...patch };
+    if (merged.type === "email") merged.optional = false; // email is always required
+    arr[i] = merged;
     setData({ ...data, customerFields: arr });
   };
   const addField = () => setData({ ...data, customerFields: [...data.customerFields, { type: "text", label: "Custom Field", optional: true }] });
@@ -779,6 +880,13 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
     if (data.customerFields[i]?.type === "email") return;
     if (data.customerFields.length <= 1) return;
     setData({ ...data, customerFields: data.customerFields.filter((_, idx) => idx !== i) });
+  };
+  const moveField = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= data.customerFields.length) return;
+    const arr = [...data.customerFields];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setData({ ...data, customerFields: arr });
   };
 
   // Inline validation: flag empty and duplicate labels
@@ -813,9 +921,13 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
               <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>
                 Field {i + 1}{isEmail && <span style={{ fontSize: 11, fontWeight: 500, color: C.textFaint, marginLeft: 6 }}>· required</span>}
               </p>
-              {!isEmail && (
-                <button onClick={() => removeField(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => moveField(i, -1)} disabled={i === 0} style={{ background: "transparent", color: i === 0 ? C.textFaint : C.textSecondary, border: `1px solid ${C.border}`, borderRadius: radius.sm, width: 24, height: 24, cursor: i === 0 ? "default" : "pointer", fontSize: 12, fontFamily: "inherit", lineHeight: 1, opacity: i === 0 ? 0.4 : 1 }} title="Move up">↑</button>
+                <button onClick={() => moveField(i, 1)} disabled={i === data.customerFields.length - 1} style={{ background: "transparent", color: i === data.customerFields.length - 1 ? C.textFaint : C.textSecondary, border: `1px solid ${C.border}`, borderRadius: radius.sm, width: 24, height: 24, cursor: i === data.customerFields.length - 1 ? "default" : "pointer", fontSize: 12, fontFamily: "inherit", lineHeight: 1, opacity: i === data.customerFields.length - 1 ? 0.4 : 1 }} title="Move down">↓</button>
+                {!isEmail && (
+                  <button onClick={() => removeField(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
+                )}
+              </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Sel label="Type" value={f.type} onChange={v => {
@@ -832,7 +944,11 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
                 {isEmpty ? "Label can't be empty" : "Another field already uses this label"}
               </p>
             )}
-            <Toggle checked={f.optional} onChange={v => updateField(i, { optional: v })} label="Optional field" desc={`The ${role} can skip this field`} />
+            {isEmail ? (
+              <p style={{ fontSize: 12, color: C.textMuted, margin: "10px 0 0" }}>Always required — receipts and payment confirmation are sent here.</p>
+            ) : (
+              <Toggle checked={f.optional} onChange={v => updateField(i, { optional: v })} label="Optional field" desc={`The ${role} can skip this field`} />
+            )}
           </div>
         );
       })}
@@ -908,11 +1024,7 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
             value={data.coverImage}
             onChange={v => setData({ ...data, coverImage: v })}
             ratio="4:1"
-            hint="Recommended size: 1200×300 px. Drag the image to choose what shows; mobile shows the whole image scaled to fit."
-            position={data.coverPosition}
-            onPositionChange={p => setData({ ...data, coverPosition: p })}
-            zoom={data.coverZoom}
-            onZoomChange={z => setData({ ...data, coverZoom: z })}
+            hint="Recommended size: 1200×300 px. You can reposition and zoom after uploading."
           />
         )}
       </SectionCard>
