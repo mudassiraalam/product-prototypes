@@ -42,8 +42,10 @@ export function PagePreview({
   const systemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = data.theme === "dark" || (data.theme === "system" && systemDark);
   const pageBg = dark ? "#0b1220" : "#f4f6fb";
-  const cardBg = dark ? "#162033" : "#ffffff";
-  const subtleBg = dark ? "#1c2a44" : "#f9fafb";
+  const cardBg = dark ? "#151f33" : "#ffffff";
+  const subtleBg = dark ? "#1f2c45" : "#eef1f7";
+  const panelBg = dark ? "#1a2540" : "#f1f4fa";  // right column surface (visible but clean)
+  const headerBg = dark ? "#101a2e" : "#f7f9fc"; // header tint
   const text = dark ? "#f1f5f9" : "#111827";
   const textMuted = dark ? "#94a3b8" : "#6b7280";
   const textFaint = dark ? "#64748b" : "#9ca3af";
@@ -59,6 +61,7 @@ export function PagePreview({
         data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
         text={text} textMuted={textMuted} textFaint={textFaint} border={border}
         font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
+        panelBg={panelBg} headerBg={headerBg}
         quantities={quantities} setQty={setQty}
       />
     );
@@ -69,6 +72,7 @@ export function PagePreview({
       data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
       text={text} textMuted={textMuted} textFaint={textFaint} border={border}
       font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
+      panelBg={panelBg} headerBg={headerBg}
       quantities={quantities} setQty={setQty}
     />
   );
@@ -79,7 +83,10 @@ export function PagePreview({
 // ──────────────────────────────────────────────────────────────────────────────
 function DesktopPreview(p: PreviewProps) {
   const { data, pageBg, cardBg, subtleBg, text, textMuted, textFaint, border, font, onBrand, btnRadius, total } = p;
+  const panelBg = p.panelBg ?? subtleBg;
+  const headerBg = p.headerBg ?? cardBg;
   const maxW = data.layout === "wide" ? 940 : 820;
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   return (
     <div style={{ background: "#f4f6fb", width: "100%", minHeight: "100%", fontFamily: font, padding: "20px 16px 32px" }}>
@@ -97,7 +104,7 @@ function DesktopPreview(p: PreviewProps) {
 
         {/* ── Clean header: logo + merchant name (no "Paying to") ────── */}
         <div style={{
-          background: cardBg,
+          background: headerBg,
           borderRadius: data.coverImage ? 0 : `${radius.lg}px ${radius.lg}px 0 0`,
           borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
           borderTop: data.coverImage ? "none" : `1px solid ${border}`,
@@ -114,7 +121,7 @@ function DesktopPreview(p: PreviewProps) {
         </div>
 
         {/* ── Product / Cause / Event / Invoice header (no floating total) ── */}
-        <HeaderBlock data={data} cardBg={cardBg} subtleBg={subtleBg} text={text} textMuted={textMuted} textFaint={textFaint} border={border} total={total} brandColor={data.brandColor} />
+        <HeaderBlock data={data} cardBg={headerBg} subtleBg={subtleBg} text={text} textMuted={textMuted} textFaint={textFaint} border={border} total={total} brandColor={data.brandColor} />
 
         {/* ── Two column body ──────────────────────────────────────── */}
         <div style={{
@@ -176,7 +183,7 @@ function DesktopPreview(p: PreviewProps) {
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Gallery</p>
                 <div style={{ display: "grid", gridTemplateColumns: (data as any).galleryImages.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>
                   {(data as any).galleryImages.map((img: string, i: number) => (
-                    <div key={i} style={{ aspectRatio: "4/3", borderRadius: radius.sm, background: `url(${img}) center/cover`, border: `1px solid ${border}` }} />
+                    <div key={i} onClick={() => setLightbox(img)} style={{ aspectRatio: "4/3", borderRadius: radius.sm, background: `${subtleBg} url(${img}) center/contain no-repeat`, border: `1px solid ${border}`, cursor: "pointer" }} />
                   ))}
                 </div>
               </div>
@@ -210,10 +217,10 @@ function DesktopPreview(p: PreviewProps) {
           <div style={{ background: border }} />
 
           {/* RIGHT: billing form */}
-          <div style={{ padding: "24px 28px" }}>
+          <div style={{ padding: "24px 28px", background: panelBg }}>
             <BillingPanel
               data={data} text={text} textMuted={textMuted} textFaint={textFaint}
-              border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
+              border={border} subtleBg={cardBg} onBrand={onBrand} btnRadius={btnRadius}
               total={total} quantities={p.quantities} setQty={p.setQty}
             />
           </div>
@@ -235,6 +242,12 @@ function DesktopPreview(p: PreviewProps) {
           </p>
         </div>
       </div>
+
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, cursor: "zoom-out" }}>
+          <img src={lightbox} alt="" style={{ maxWidth: "90%", maxHeight: "90%", objectFit: "contain", borderRadius: radius.md }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -294,7 +307,7 @@ function MobilePreview(p: PreviewProps) {
             {(data as any).galleryImages?.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 14 }}>
                 {(data as any).galleryImages.map((img: string, i: number) => (
-                  <div key={i} style={{ aspectRatio: "4/3", borderRadius: radius.sm, background: `url(${img}) center/cover`, border: `1px solid ${border}` }} />
+                  <div key={i} style={{ aspectRatio: "4/3", borderRadius: radius.sm, background: `${subtleBg} url(${img}) center/contain no-repeat`, border: `1px solid ${border}` }} />
                 ))}
               </div>
             )}
@@ -644,6 +657,7 @@ interface PreviewProps {
   pageBg: string; cardBg: string; subtleBg: string;
   text: string; textMuted: string; textFaint: string; border: string;
   font: string; onBrand: string; btnRadius: number; total: string;
+  panelBg?: string; headerBg?: string;
   quantities?: Record<number, number>;
   setQty?: (i: number, delta: number) => void;
 }
