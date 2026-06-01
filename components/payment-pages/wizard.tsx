@@ -87,14 +87,14 @@ function hexAlpha(hex: string, alpha: number) {
 // Wizard Sidebar — vertical step list
 // ──────────────────────────────────────────────────────────────────────────────
 function WizardStepper({
-  steps, currentStep, completedSteps, pageType,
+  steps, currentStep, pageType,
 }: {
-  steps: { key: string; label: string }[]; currentStep: number; completedSteps: number[]; pageType: PageType;
+  steps: { key: string; label: string }[]; currentStep: number; pageType: PageType;
 }) {
   const meta = PAGE_TYPES.find(t => t.key === pageType)!;
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 18, padding: "11px 24px",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 18, padding: "11px 24px",
       borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, overflowX: "auto",
     }}>
       {/* Context — what's being created */}
@@ -108,7 +108,7 @@ function WizardStepper({
       {/* Horizontal steps with chevrons */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
         {steps.map((s, i) => {
-          const done = completedSteps.includes(i);
+          const done = i < currentStep;
           const active = currentStep === i;
           return (
             <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -419,7 +419,7 @@ export function Wizard({ onBack }: { onBack: () => void }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
       {/* Horizontal stepper — second header row, full width */}
-      <WizardStepper steps={steps} currentStep={currentStep} completedSteps={completedSteps} pageType={selectedType ?? "page"} />
+      <WizardStepper steps={steps} currentStep={currentStep} pageType={selectedType ?? "page"} />
 
       {/* Form + preview row */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
