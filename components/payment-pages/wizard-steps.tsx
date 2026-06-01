@@ -36,6 +36,8 @@ export interface WizardData {
   description: string;
   pageSlug: string;
   coverImage: string;
+  coverPosition: number;
+  coverZoom: number;
   productImage: string;
   currency: "INR";
 
@@ -113,6 +115,8 @@ export const DEFAULT_WIZARD: WizardData = {
   description: "",
   pageSlug: "",
   coverImage: "",
+  coverPosition: 50,
+  coverZoom: 100,
   productImage: "",
   currency: "INR",
 
@@ -188,30 +192,78 @@ const FIELD_TYPES = [
 
 // ── Image Upload ──────────────────────────────────────────────────────────────
 function ImageUpload({
-  label, value, onChange, hint, ratio = "16:9",
+  label, value, onChange, hint, ratio = "16:9", position, onPositionChange, zoom, onZoomChange,
 }: {
   label: string; value: string; onChange: (v: string) => void; hint?: string; ratio?: "16:9" | "1:1" | "4:1";
+  position?: number; onPositionChange?: (p: number) => void;
+  zoom?: number; onZoomChange?: (z: number) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const aspect = ratio === "16:9" ? "16 / 9" : ratio === "4:1" ? "4 / 1" : "1 / 1";
+  const repositionable = onPositionChange !== undefined;
+  const pos = position ?? 50;
+  const zm = zoom ?? 100;
+  const [error, setError] = useState<string>("");
+  const [lowRes, setLowRes] = useState(false);
+  const dragRef = useRef<{ startY: number; startPos: number } | null>(null);
+
+  const MAX_BYTES = 2 * 1024 * 1024; // 2MB
+  const MIN_WIDTH = ratio === "4:1" ? 1200 : ratio === "1:1" ? 256 : 800;
 
   const handleFile = (file: File) => {
+    setError("");
+    setLowRes(false);
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+      setError("Please upload a PNG or JPG image.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError("Image is larger than 2MB. Please upload a smaller file.");
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = e => onChange((e.target?.result as string) ?? "");
+    reader.onload = e => {
+      const src = (e.target?.result as string) ?? "";
+      // Low-resolution check
+      const img = new Image();
+      img.onload = () => { if (img.naturalWidth < MIN_WIDTH) setLowRes(true); };
+      img.src = src;
+      onChange(src);
+    };
     reader.readAsDataURL(file);
   };
+
+  // Drag to reposition (vertical), only when repositionable and an image exists
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!repositionable || !value) return;
+    dragRef.current = { startY: e.clientY, startPos: pos };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current || !onPositionChange) return;
+    const dy = e.clientY - dragRef.current.startY;
+    const next = Math.max(0, Math.min(100, dragRef.current.startPos + (dy / 1.5)));
+    onPositionChange(Math.round(next));
+  };
+  const onPointerUp = () => { dragRef.current = null; };
 
   return (
     <div style={{ marginBottom: 18 }}>
       {label && <Label>{label}</Label>}
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => { if (!value) inputRef.current?.click(); }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         style={{
           width: "100%", aspectRatio: aspect, border: `1.5px dashed ${value ? C.blueMid : C.border}`,
-          borderRadius: radius.md, background: value ? "transparent" : C.bg, cursor: "pointer",
+          borderRadius: radius.md, background: value ? "transparent" : C.bg,
+          cursor: value ? (repositionable ? "grab" : "default") : "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-          backgroundImage: value ? `url(${value})` : "none", backgroundSize: "cover", backgroundPosition: "center",
-          position: "relative", transition: "border-color 0.15s",
+          backgroundImage: value ? `url(${value})` : "none",
+          backgroundSize: value ? `${zm}%` : "cover",
+          backgroundPosition: `center ${pos}%`, backgroundRepeat: "no-repeat",
+          position: "relative", transition: "border-color 0.15s", touchAction: "none",
         }}
       >
         {!value && (
@@ -221,17 +273,44 @@ function ImageUpload({
             <p style={{ fontSize: 10, margin: "2px 0 0", color: C.textFaint }}>PNG, JPG up to 2MB</p>
           </div>
         )}
+        {value && repositionable && (
+          <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: C.white, fontSize: 10, padding: "3px 8px", borderRadius: radius.sm, pointerEvents: "none" }}>
+            ⤢ drag to reposition
+          </div>
+        )}
         {value && (
           <button
-            onClick={e => { e.stopPropagation(); onChange(""); }}
+            onClick={e => { e.stopPropagation(); onChange(""); setError(""); setLowRes(false); }}
             style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: C.white, border: "none", borderRadius: radius.sm, padding: "4px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
           >
             Remove
           </button>
         )}
       </div>
+
+      {/* Zoom slider (only when image + zoom control wired) */}
+      {value && repositionable && onZoomChange && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+          <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Zoom</span>
+          <input type="range" min={100} max={250} value={zm} onChange={e => onZoomChange(parseInt(e.target.value))} style={{ flex: 1 }} />
+          <button
+            onClick={() => { onPositionChange?.(50); onZoomChange(100); }}
+            style={{ fontSize: 11, padding: "4px 8px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.sm, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
+      {error && <p style={{ fontSize: 11, color: C.red, margin: "6px 0 0" }}>{error}</p>}
+      {lowRes && !error && (
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginTop: 6, padding: "8px 10px", background: C.amberBg, borderRadius: radius.sm }}>
+          <span style={{ fontSize: 12 }}>⚠</span>
+          <p style={{ fontSize: 11, color: C.amber, margin: 0, lineHeight: 1.5 }}>This image is smaller than recommended and may look blurry when displayed. Use a wider image for best results.</p>
+        </div>
+      )}
       <input
-        ref={inputRef} type="file" accept="image/*" hidden
+        ref={inputRef} type="file" accept="image/png,image/jpeg" hidden
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
       />
       {hint && <p style={{ fontSize: 12, color: C.textFaint, margin: "6px 0 0", lineHeight: 1.5 }}>{hint}</p>}
@@ -266,11 +345,23 @@ function PageInfoSection({ data, setData }: { data: WizardData; setData: (d: Wiz
         <div style={{ marginTop: 16 }}>
           {/* Contact */}
           <div style={{ marginBottom: 14 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Contact</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Contact (shown on page)</p>
+            <Inp label="Email" value={data.contactEmail} onChange={v => setData({ ...data, contactEmail: v })} placeholder="support@brand.com" type="email" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Inp label="Email" value={data.contactEmail} onChange={v => setData({ ...data, contactEmail: v })} placeholder="support@brand.com" type="email" />
               <Inp label="Phone" value={data.contactPhone} onChange={v => setData({ ...data, contactPhone: v })} placeholder="+91 98765 43210" />
+              <Inp label="WhatsApp" value={data.contactWhatsapp} onChange={v => setData({ ...data, contactWhatsapp: v })} placeholder="+91 98765 43210" />
             </div>
+            <Inp label="Website URL" value={data.contactWebsite} onChange={v => setData({ ...data, contactWebsite: v })} placeholder="https://yourbrand.com" />
+            <Inp label="Support Link" value={data.supportLink} onChange={v => setData({ ...data, supportLink: v })} placeholder="https://yourbrand.com/support" />
+          </div>
+
+          {/* Follow Us (social) */}
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Follow Us <span style={{ fontWeight: 400, textTransform: "none" }}>(optional)</span></p>
+            <Inp label="Twitter / X" value={data.socialTwitter} onChange={v => setData({ ...data, socialTwitter: v })} placeholder="https://x.com/yourbrand" prefix="X" />
+            <Inp label="Instagram" value={data.socialInstagram} onChange={v => setData({ ...data, socialInstagram: v })} placeholder="https://instagram.com/yourbrand" prefix="IG" />
+            <Inp label="Facebook" value={data.socialFacebook} onChange={v => setData({ ...data, socialFacebook: v })} placeholder="https://facebook.com/yourbrand" prefix="FB" />
+            <Inp label="LinkedIn" value={data.socialLinkedin} onChange={v => setData({ ...data, socialLinkedin: v })} placeholder="https://linkedin.com/company/yourbrand" prefix="IN" />
           </div>
 
           {/* Gallery */}
@@ -396,14 +487,7 @@ function ItemRow({
         )}
       </div>
 
-      <Inp
-        label="Description (optional)"
-        value={item.description ?? ""}
-        onChange={v => onUpdate({ description: v })}
-        placeholder={isTickets ? "What's included with this tier" : "Short description for this item"}
-      />
-
-      {/* Image — collapsible to keep the row tight */}
+      {/* Image — optional thumbnail, replaces the old description field */}
       {!showImage && (
         <button
           onClick={() => setShowImage(true)}
@@ -429,7 +513,7 @@ function ItemRow({
               label="Min Quantity"
               value={item.minQty ?? ""}
               onChange={v => onUpdate({ minQty: v })}
-              placeholder="1"
+              placeholder="0"
               type="number"
             />
             <Inp
@@ -440,12 +524,6 @@ function ItemRow({
               type="number"
             />
           </div>
-          <Toggle
-            checked={item.optional ?? false}
-            onChange={v => onUpdate({ optional: v })}
-            label="Optional item"
-            desc="The customer can skip this item"
-          />
         </>
       )}
     </div>
@@ -480,17 +558,13 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
         <Textarea label="Description" value={data.description} onChange={v => setData({ ...data, description: v })} placeholder="Describe what your customers are paying for..." rows={4} hint="Maximum 500 characters" />
       </SectionCard>
 
-      <SectionCard title="Visuals">
-        <ImageUpload label="Cover Banner" value={data.coverImage} onChange={v => setData({ ...data, coverImage: v })} ratio="4:1" hint="Recommended size: 1200×300 px. Shown at the top of your page." />
-      </SectionCard>
-
       <SectionCard title="Pricing">
         <div style={{ marginBottom: 14 }}>
           <Label>How are you charging?</Label>
           <SegmentedControl
             options={[
               { key: "fixed", label: "Fixed Amount" },
-              { key: "customer", label: "Customer Decides" },
+              { key: "customer", label: "Customer-set Amount" },
               { key: "multiple", label: "Multiple Items" },
             ]}
             value={data.amountType}
@@ -533,17 +607,34 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
               <Inp label="Minimum" value={data.minAmount} onChange={v => setData({ ...data, minAmount: v })} placeholder="100" prefix={getSymbol(data.currency)} type="number" />
               <Inp label="Maximum" value={data.maxAmount} onChange={v => setData({ ...data, maxAmount: v })} placeholder="100000" prefix={getSymbol(data.currency)} type="number" />
             </div>
+            {data.minAmount && data.maxAmount && parseFloat(data.maxAmount) < parseFloat(data.minAmount) && (
+              <p style={{ fontSize: 11, color: C.red, margin: "-6px 0 6px" }}>Maximum must be greater than or equal to the minimum.</p>
+            )}
 
             {/* Suggested amounts — always shown for Customer Decides */}
             <div style={{ marginTop: 6 }}>
               <Label>Suggested Amounts <span style={{ fontWeight: 400, color: C.textMuted }}>(optional)</span></Label>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 8 }}>
-                {data.suggestedAmounts.map((amt, i) => (
-                  <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <Inp value={amt} onChange={v => updateSuggested(i, v)} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
-                    <button onClick={() => removeSuggested(i)} style={{ background: C.redBg, color: C.red, border: "none", borderRadius: radius.sm, width: 32, height: 38, cursor: "pointer", fontSize: 14, fontWeight: 700, marginBottom: 18, flexShrink: 0, fontFamily: "inherit" }}>×</button>
-                  </div>
-                ))}
+                {data.suggestedAmounts.map((amt, i) => {
+                  const n = parseFloat(amt);
+                  const minN = parseFloat(data.minAmount);
+                  const maxN = parseFloat(data.maxAmount);
+                  const belowMin = amt !== "" && !isNaN(n) && !isNaN(minN) && n < minN;
+                  const aboveMax = amt !== "" && !isNaN(n) && !isNaN(maxN) && n > maxN;
+                  return (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <Inp value={amt} onChange={v => updateSuggested(i, v)} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
+                        <button onClick={() => removeSuggested(i)} style={{ background: C.redBg, color: C.red, border: "none", borderRadius: radius.sm, width: 32, height: 38, cursor: "pointer", fontSize: 14, fontWeight: 700, marginBottom: 18, flexShrink: 0, fontFamily: "inherit" }}>×</button>
+                      </div>
+                      {(belowMin || aboveMax) && (
+                        <p style={{ fontSize: 11, color: C.red, margin: "-14px 0 0" }}>
+                          {belowMin ? "Below minimum" : "Above maximum"}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <Btn variant="secondary" size="sm" onClick={addSuggested}>+ Add suggested amount</Btn>
               <p style={{ fontSize: 11, color: C.textFaint, margin: "8px 0 0", lineHeight: 1.5 }}>
@@ -609,17 +700,6 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
       </SectionCard>
 
       <PageInfoSection data={data} setData={setData} />
-
-      <SectionCard title="URL">
-        <Inp
-          label="Custom URL"
-          value={data.pageSlug}
-          onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
-          placeholder="bluetooth-headphones"
-          prefix="pay.enkash.in/"
-          hint={`Your page will be available at pay.enkash.in/${slugAuto || "your-slug"}`}
-        />
-      </SectionCard>
     </div>
   );
 }
@@ -681,10 +761,6 @@ export function StepInvoiceDetails({ data, setData }: { data: WizardData; setDat
       </SectionCard>
 
       <PageInfoSection data={data} setData={setData} />
-
-      <SectionCard title="URL">
-        <Inp label="Custom URL" value={data.pageSlug} onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} placeholder="invoice-acme-q4" prefix="pay.enkash.in/" />
-      </SectionCard>
     </div>
   );
 }
@@ -698,7 +774,19 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
     setData({ ...data, customerFields: arr });
   };
   const addField = () => setData({ ...data, customerFields: [...data.customerFields, { type: "text", label: "Custom Field", optional: true }] });
-  const removeField = (i: number) => setData({ ...data, customerFields: data.customerFields.filter((_, idx) => idx !== i) });
+  const removeField = (i: number) => {
+    // Email is non-removable (required for receipts); never allow zero fields.
+    if (data.customerFields[i]?.type === "email") return;
+    if (data.customerFields.length <= 1) return;
+    setData({ ...data, customerFields: data.customerFields.filter((_, idx) => idx !== i) });
+  };
+
+  // Inline validation: flag empty and duplicate labels
+  const labelCounts = data.customerFields.reduce<Record<string, number>>((acc, f) => {
+    const key = f.label.trim().toLowerCase();
+    if (key) acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
 
   // Determine the role label based on context
   const isInvoice = data.pageType === "invoice";
@@ -714,22 +802,40 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
         Required fields are validated before payment. Optional fields can be skipped by the {role}.
       </InfoBanner>
 
-      {data.customerFields.map((f, i) => (
-        <div key={i} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>Field {i + 1}</p>
-            <button onClick={() => removeField(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
+      {data.customerFields.map((f, i) => {
+        const isEmail = f.type === "email";
+        const labelKey = f.label.trim().toLowerCase();
+        const isEmpty = !f.label.trim();
+        const isDuplicate = !!labelKey && labelCounts[labelKey] > 1;
+        return (
+          <div key={i} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>
+                Field {i + 1}{isEmail && <span style={{ fontSize: 11, fontWeight: 500, color: C.textFaint, marginLeft: 6 }}>· required</span>}
+              </p>
+              {!isEmail && (
+                <button onClick={() => removeField(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Sel label="Type" value={f.type} onChange={v => {
+                const opt = FIELD_TYPES.find(x => x.value === v);
+                const prev = FIELD_TYPES.find(x => x.value === f.type);
+                // Only auto-fill the label if the user hasn't customized it.
+                const labelWasDefault = !f.label.trim() || f.label === prev?.label;
+                updateField(i, { type: v, label: labelWasDefault ? (opt?.label ?? f.label) : f.label });
+              }} options={FIELD_TYPES} />
+              <Inp label="Label" value={f.label} onChange={v => updateField(i, { label: v })} />
+            </div>
+            {(isEmpty || isDuplicate) && (
+              <p style={{ fontSize: 11, color: C.red, margin: "4px 0 0" }}>
+                {isEmpty ? "Label can't be empty" : "Another field already uses this label"}
+              </p>
+            )}
+            <Toggle checked={f.optional} onChange={v => updateField(i, { optional: v })} label="Optional field" desc={`The ${role} can skip this field`} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Sel label="Type" value={f.type} onChange={v => {
-              const opt = FIELD_TYPES.find(x => x.value === v);
-              updateField(i, { type: v, label: opt?.label ?? f.label });
-            }} options={FIELD_TYPES} />
-            <Inp label="Label" value={f.label} onChange={v => updateField(i, { label: v })} />
-          </div>
-          <Toggle checked={f.optional} onChange={v => updateField(i, { optional: v })} label="Optional field" desc={`The ${role} can skip this field`} />
-        </div>
-      ))}
+        );
+      })}
 
       <Btn variant="secondary" size="sm" onClick={addField}>+ Add another field</Btn>
 
@@ -768,7 +874,16 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
           ))}
         </div>
         <ColorPicker label="Custom Color" value={data.brandColor} onChange={v => setData({ ...data, brandColor: v })} />
-        <Toggle checked={data.showLogo} onChange={v => setData({ ...data, showLogo: v })} label="Show merchant logo on banner" desc="Adds a small logo badge to the top of your page" />
+        <div style={{ marginTop: 14, marginBottom: 4 }}>
+          <Inp
+            label="Merchant / Business Name"
+            value={data.merchantName}
+            onChange={v => setData({ ...data, merchantName: v })}
+            placeholder="Your Brand"
+            hint="Shown in the page header. In production this auto-populates from your KYC'd account profile."
+          />
+        </div>
+        <Toggle checked={data.showLogo} onChange={v => setData({ ...data, showLogo: v })} label="Show merchant logo" desc="Appears in your page header" />
         {data.showLogo && (
           <ImageUpload
             label="Upload Logo"
@@ -776,6 +891,28 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
             onChange={v => setData({ ...data, ...({ logoImage: v } as any) })}
             hint="Square image recommended (PNG with transparent background works best)"
             ratio="1:1"
+          />
+        )}
+      </SectionCard>
+
+      <SectionCard title="Cover Banner (optional)">
+        <Toggle
+          checked={!!data.coverImage || (data as any)._bannerEnabled}
+          onChange={v => setData({ ...data, ...(v ? {} : { coverImage: "" }), ...({ _bannerEnabled: v } as any) })}
+          label="Add a banner to your page"
+          desc="A wide image shown across the top of your page header"
+        />
+        {(!!data.coverImage || (data as any)._bannerEnabled) && (
+          <ImageUpload
+            label="Banner image"
+            value={data.coverImage}
+            onChange={v => setData({ ...data, coverImage: v })}
+            ratio="4:1"
+            hint="Recommended size: 1200×300 px. Drag the image to choose what shows; mobile shows the whole image scaled to fit."
+            position={data.coverPosition}
+            onPositionChange={p => setData({ ...data, coverPosition: p })}
+            zoom={data.coverZoom}
+            onZoomChange={z => setData({ ...data, coverZoom: z })}
           />
         )}
       </SectionCard>
@@ -819,41 +956,49 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
 // (Max Total Revenue field removed — no clear competitor parallel or use case.)
 // ──────────────────────────────────────────────────────────────────────────────
 export function StepSettings({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const slugAuto = data.pageSlug || data.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+
+  // Validation
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const expiryInPast = !!data.expiryDate && data.expiryDate < todayStr;
+  const maxPaymentsInvalid = !!data.maxPayments && (parseInt(data.maxPayments) < 1 || isNaN(parseInt(data.maxPayments)));
+  const isValidUrl = (u: string) => { try { new URL(u); return true; } catch { return false; } };
+  const redirectInvalid = !!data.redirectUrl && !isValidUrl(data.redirectUrl);
+  const webhookInvalid = !!data.webhookUrl && !isValidUrl(data.webhookUrl);
+
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Settings & Publish</h2>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>Add contact info, social links, expiry and post-payment behaviour.</p>
+      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>Set your page address, limits, and what happens after payment.</p>
 
-      <SectionCard title="Contact Us (shown on page)">
-        <Inp label="Email" value={data.contactEmail} onChange={v => setData({ ...data, contactEmail: v })} placeholder="support@yourbrand.com" type="email" />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Inp label="Phone Number" value={data.contactPhone} onChange={v => setData({ ...data, contactPhone: v })} placeholder="+91 9876543210" />
-          <Inp label="WhatsApp Number" value={data.contactWhatsapp} onChange={v => setData({ ...data, contactWhatsapp: v })} placeholder="+91 9876543210" />
-        </div>
-        <Inp label="Website URL" value={data.contactWebsite} onChange={v => setData({ ...data, contactWebsite: v })} placeholder="https://yourbrand.com" />
-        <Inp label="Support Link" value={data.supportLink} onChange={v => setData({ ...data, supportLink: v })} placeholder="https://yourbrand.com/support" />
-      </SectionCard>
-
-      <SectionCard title="Follow Us (optional)">
-        <Inp label="Twitter / X" value={data.socialTwitter} onChange={v => setData({ ...data, socialTwitter: v })} placeholder="https://x.com/yourbrand" prefix="X" />
-        <Inp label="Instagram" value={data.socialInstagram} onChange={v => setData({ ...data, socialInstagram: v })} placeholder="https://instagram.com/yourbrand" prefix="IG" />
-        <Inp label="Facebook" value={data.socialFacebook} onChange={v => setData({ ...data, socialFacebook: v })} placeholder="https://facebook.com/yourbrand" prefix="FB" />
-        <Inp label="LinkedIn" value={data.socialLinkedin} onChange={v => setData({ ...data, socialLinkedin: v })} placeholder="https://linkedin.com/company/yourbrand" prefix="IN" />
+      <SectionCard title="Page URL">
+        <Inp
+          label="Custom URL"
+          value={data.pageSlug}
+          onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
+          placeholder="bluetooth-headphones"
+          prefix="pay.enkash.in/"
+          hint={`Your page will be available at pay.enkash.in/${slugAuto || "your-slug"}`}
+        />
       </SectionCard>
 
       <SectionCard title="Limits & Expiry">
         <Inp label="Page Expires On" value={data.expiryDate} onChange={v => setData({ ...data, expiryDate: v })} type="date" hint="Leave blank for no expiry" />
+        {expiryInPast && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 12px" }}>Expiry date must be in the future.</p>}
         <Inp label="Max Number of Payments" value={data.maxPayments} onChange={v => setData({ ...data, maxPayments: v })} placeholder="Unlimited" type="number" hint="Auto-deactivate the page once this limit is reached" />
+        {maxPaymentsInvalid && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 0" }}>Must be 1 or more (or leave blank for unlimited).</p>}
       </SectionCard>
 
       <SectionCard title="After Payment">
         <Toggle checked={data.sendReceipt} onChange={v => setData({ ...data, sendReceipt: v })} label="Send payment receipt by email" desc="A branded receipt is auto-emailed to the customer after a successful payment" />
         <Textarea label="Custom Success Message" value={data.successMessage} onChange={v => setData({ ...data, successMessage: v })} placeholder="Thank you for your payment! We'll be in touch shortly." rows={2} hint="Shown only if no Redirect URL is set" />
         <Inp label="Redirect URL (optional)" value={data.redirectUrl} onChange={v => setData({ ...data, redirectUrl: v })} placeholder="https://yourbrand.com/thank-you" hint="If set, customers are redirected here after payment — the success message above is ignored" />
+        {redirectInvalid && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 0" }}>Enter a valid URL (including https://).</p>}
       </SectionCard>
 
       <SectionCard title="Webhooks (advanced)">
         <Inp label="Webhook URL" value={data.webhookUrl} onChange={v => setData({ ...data, webhookUrl: v })} placeholder="https://api.yourbrand.com/webhooks/enkash" hint="Receive payment events on your server" />
+        {webhookInvalid && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 0" }}>Enter a valid URL (including https://).</p>}
       </SectionCard>
     </div>
   );
