@@ -86,60 +86,55 @@ function hexAlpha(hex: string, alpha: number) {
 // ──────────────────────────────────────────────────────────────────────────────
 // Wizard Sidebar — vertical step list
 // ──────────────────────────────────────────────────────────────────────────────
-function WizardSidebar({
-  steps, currentStep, completedSteps, pageType, brandColor,
+function WizardStepper({
+  steps, currentStep, completedSteps, pageType,
 }: {
-  steps: { key: string; label: string }[]; currentStep: number; completedSteps: number[]; pageType: PageType; brandColor: string;
+  steps: { key: string; label: string }[]; currentStep: number; completedSteps: number[]; pageType: PageType;
 }) {
   const meta = PAGE_TYPES.find(t => t.key === pageType)!;
   return (
-    <div style={{ width: 220, background: C.white, borderRight: `1px solid ${C.border}`, padding: "26px 18px", flexShrink: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
-      <div style={{ background: hexAlpha(meta.color, 0.08), border: `1px solid ${hexAlpha(meta.color, 0.25)}`, borderRadius: radius.md, padding: "10px 12px", marginBottom: 22 }}>
-        <p style={{ fontSize: 10, color: C.textMuted, margin: "0 0 2px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Creating</p>
-        <p style={{ fontSize: 13, fontWeight: 700, color: meta.color, margin: 0 }}>{meta.icon} {meta.title} Page</p>
-      </div>
+    <div style={{
+      display: "flex", alignItems: "center", gap: 18, padding: "11px 24px",
+      borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, overflowX: "auto",
+    }}>
+      {/* Context — what's being created */}
+      <span style={{ fontSize: 12, color: C.textMuted, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.05em" }}>Creating</span>
+        <span style={{ fontWeight: 700, color: meta.color }}>{meta.icon} {meta.title}</span>
+      </span>
 
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>Progress</span>
-          <span style={{ fontSize: 11, color: C.blue, fontWeight: 700 }}>{Math.min(currentStep + 1, steps.length)} / {steps.length}</span>
-        </div>
-        <div style={{ height: 4, background: C.border, borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${((currentStep + 1) / steps.length) * 100}%`, background: C.blue, borderRadius: 4, transition: "width 0.35s ease" }} />
-        </div>
-      </div>
+      <div style={{ height: 18, width: 1, background: C.border, flexShrink: 0 }} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 22 }}>
+      {/* Horizontal steps with chevrons */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
         {steps.map((s, i) => {
           const done = completedSteps.includes(i);
           const active = currentStep === i;
           return (
-            <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: radius.md, background: active ? C.blueLight : "transparent", transition: "background 0.15s" }}>
+            <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                background: done ? C.green : active ? C.blue : C.white,
-                border: `2px solid ${done ? C.green : active ? C.blue : C.border}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, color: (done || active) ? C.white : C.textFaint, fontWeight: 700,
-                transition: "all 0.2s",
+                display: "flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: radius.md,
+                background: active ? C.blue : "transparent", whiteSpace: "nowrap", transition: "background 0.15s",
               }}>
-                {done ? "✓" : i + 1}
+                <span style={{
+                  width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                  background: done ? C.green : active ? C.white : "transparent",
+                  border: `1.5px solid ${done ? C.green : active ? C.white : C.border}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 700, color: done ? C.white : active ? C.blue : C.textFaint,
+                }}>
+                  {done ? "✓" : i + 1}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? C.white : done ? C.textSecondary : C.textFaint }}>
+                  {s.label}
+                </span>
               </div>
-              <p style={{ fontSize: 13, fontWeight: active ? 700 : done ? 600 : 500, color: active ? C.blue : done ? C.textSecondary : C.textFaint, margin: 0, lineHeight: 1.2 }}>
-                {s.label}
-              </p>
+              {i < steps.length - 1 && (
+                <span style={{ fontSize: 13, color: C.textFaint, flexShrink: 0 }}>›</span>
+              )}
             </div>
           );
         })}
-      </div>
-
-      <div style={{ flex: 1 }} />
-
-      <div style={{ background: C.amberBg, border: `1px solid ${C.amberMid}`, borderRadius: radius.md, padding: "10px 12px" }}>
-        <p style={{ fontSize: 11, color: C.amber, margin: "0 0 2px", fontWeight: 700 }}>Tip</p>
-        <p style={{ fontSize: 11, color: "#92400e", margin: 0, lineHeight: 1.5 }}>
-          Watch the live preview update as you fill in your details on the right.
-        </p>
       </div>
     </div>
   );
@@ -422,29 +417,33 @@ export function Wizard({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
-      <WizardSidebar steps={steps} currentStep={currentStep} completedSteps={completedSteps} pageType={selectedType ?? "page"} brandColor={data.brandColor} />
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      {/* Horizontal stepper — second header row, full width */}
+      <WizardStepper steps={steps} currentStep={currentStep} completedSteps={completedSteps} pageType={selectedType ?? "page"} />
 
-      {/* Form area — narrower */}
-      <div style={{ width: 460, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, flexShrink: 0, background: C.white }}>
-        <div style={{ flex: 1, padding: "26px 28px", overflowY: "auto" }}>
-          {stepComponents[currentStep]}
-        </div>
-        <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-          <Btn onClick={goBack} variant="ghost" size="sm">
-            ← {currentStep === 0 ? "Type" : "Back"}
-          </Btn>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 11, color: C.textFaint }}>Step {currentStep + 1} of {totalSteps}</span>
-            <Btn onClick={goNext} size="sm">
-              {currentStep === totalSteps - 1 ? "Publish Page" : "Continue →"}
+      {/* Form + preview row */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
+        {/* Form area */}
+        <div style={{ width: 460, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, flexShrink: 0, background: C.white }}>
+          <div style={{ flex: 1, padding: "26px 28px", overflowY: "auto" }}>
+            {stepComponents[currentStep]}
+          </div>
+          <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <Btn onClick={goBack} variant="ghost" size="sm">
+              ← {currentStep === 0 ? "Type" : "Back"}
             </Btn>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 11, color: C.textFaint }}>Step {currentStep + 1} of {totalSteps}</span>
+              <Btn onClick={goNext} size="sm">
+                {currentStep === totalSteps - 1 ? "Publish Page" : "Continue →"}
+              </Btn>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Live preview — takes the rest */}
-      <PreviewPane data={data} device={device} onDeviceChange={setDevice} />
+        {/* Live preview — takes the rest */}
+        <PreviewPane data={data} device={device} onDeviceChange={setDevice} />
+      </div>
     </div>
   );
 }
