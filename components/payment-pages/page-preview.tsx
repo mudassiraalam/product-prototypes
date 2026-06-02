@@ -36,15 +36,20 @@ export function PagePreview({
 }) {
   // Live, interactive item quantities (multiple-items / tickets). Start at 0.
   const [quantities, setQuantities] = useState<Record<number, number>>({});
-  const setQty = (i: number, delta: number) =>
-    setQuantities(prev => ({ ...prev, [i]: Math.max(0, (prev[i] ?? 0) + delta) }));
+  const setQty = (i: number, delta: number, min = 0, max = Infinity) =>
+    setQuantities(prev => {
+      const next = Math.max(min, Math.min(max, (prev[i] ?? min) + delta));
+      return { ...prev, [i]: next };
+    });
+  // Customer-set amount (chips + custom typing)
+  const [chosenAmount, setChosenAmount] = useState<string>("");
 
   const systemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = data.theme === "dark" || (data.theme === "system" && systemDark);
   const pageBg = dark ? "#0b1220" : "#f4f6fb";
   const cardBg = dark ? "#151f33" : "#ffffff";
   const subtleBg = dark ? "#1f2c45" : "#eef1f7";
-  const panelBg = dark ? "#1a2540" : "#faf8f3";  // warm cream in light, lighter navy in dark
+  const panelBg = dark ? "#1a2540" : "#f4f4f6";  // soft gray-white in light, lighter navy in dark
   const headerBg = dark ? "#101a2e" : "#ffffff"; // header stays clean/white in light
   const text = dark ? "#f1f5f9" : "#111827";
   const textMuted = dark ? "#94a3b8" : "#6b7280";
@@ -53,7 +58,7 @@ export function PagePreview({
   const font = FONT_MAP[data.fontStyle];
   const onBrand = isDark(data.brandColor) ? "#ffffff" : "#0f172a";
   const btnRadius = data.buttonStyle === "pill" ? 999 : data.buttonStyle === "sharp" ? 4 : 10;
-  const total = computeTotalLive(data, quantities);
+  const total = computeTotalLive(data, quantities, chosenAmount);
 
   if (device === "mobile") {
     return (
@@ -62,7 +67,7 @@ export function PagePreview({
         text={text} textMuted={textMuted} textFaint={textFaint} border={border}
         font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
         panelBg={panelBg} headerBg={headerBg} dark={dark}
-        quantities={quantities} setQty={setQty}
+        quantities={quantities} setQty={setQty} chosenAmount={chosenAmount} setChosenAmount={setChosenAmount}
       />
     );
   }
@@ -73,7 +78,7 @@ export function PagePreview({
       text={text} textMuted={textMuted} textFaint={textFaint} border={border}
       font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
       panelBg={panelBg} headerBg={headerBg} dark={dark}
-      quantities={quantities} setQty={setQty}
+      quantities={quantities} setQty={setQty} chosenAmount={chosenAmount} setChosenAmount={setChosenAmount}
     />
   );
 }
@@ -221,7 +226,7 @@ function DesktopPreview(p: PreviewProps) {
             <BillingPanel
               data={data} text={text} textMuted={textMuted} textFaint={textFaint}
               border={border} subtleBg={cardBg} onBrand={onBrand} btnRadius={btnRadius}
-              total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark}
+              total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
             />
           </div>
         </div>
@@ -356,7 +361,7 @@ function MobilePreview(p: PreviewProps) {
               <BillingPanel
                 data={data} text={text} textMuted={textMuted} textFaint={textFaint}
                 border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
-                total={total} compact quantities={p.quantities} setQty={p.setQty} dark={p.dark}
+                total={total} compact quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
               />
             </div>
           </div>
@@ -411,12 +416,12 @@ function HeaderBlock({
 // Billing panel — type-aware
 // ──────────────────────────────────────────────────────────────────────────────
 function BillingPanel({
-  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty, dark,
+  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty, dark, chosenAmount, setChosenAmount,
 }: {
   data: WizardData; text: string; textMuted: string; textFaint: string; border: string;
   subtleBg: string; onBrand: string; btnRadius: number; total: string; compact?: boolean;
-  quantities?: Record<number, number>; setQty?: (i: number, delta: number) => void;
-  dark?: boolean;
+  quantities?: Record<number, number>; setQty?: (i: number, delta: number, min?: number, max?: number) => void;
+  dark?: boolean; chosenAmount?: string; setChosenAmount?: (v: string) => void;
 }) {
   const qty = quantities ?? {};
   const bump = setQty ?? (() => {});
@@ -476,22 +481,29 @@ function BillingPanel({
       {isCustomerDecides && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-            {(data.suggestedAmounts.filter(a => a).length === 0 ? ["100", "500", "1000", "2500"] : data.suggestedAmounts).slice(0, 4).map((amt, i) => (
-              <button key={i} style={{
-                padding: "10px", border: `1.5px solid ${i === 1 ? data.brandColor : border}`,
-                background: i === 1 ? hexAlpha(data.brandColor, 0.08) : "transparent",
-                color: i === 1 ? data.brandColor : text, borderRadius: radius.sm, fontSize: 13, fontWeight: 700,
-                cursor: "default", fontFamily: "inherit",
-              }}>
-                {symbol}{amt || "—"}
-              </button>
-            ))}
+            {(data.suggestedAmounts.filter(a => a).length === 0 ? ["100", "500", "1000", "2500"] : data.suggestedAmounts.filter(a => a)).slice(0, 4).map((amt, i) => {
+              const selected = chosenAmount === amt;
+              return (
+                <button key={i} onClick={() => setChosenAmount?.(amt)} style={{
+                  padding: "10px", border: `1.5px solid ${selected ? data.brandColor : fieldBorder}`,
+                  background: selected ? hexAlpha(data.brandColor, 0.08) : fieldSurface,
+                  color: selected ? data.brandColor : text, borderRadius: radius.sm, fontSize: 13, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}>
+                  {symbol}{amt || "—"}
+                </button>
+              );
+            })}
           </div>
-          <div style={{ display: "flex", alignItems: "center", border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden", marginTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, overflow: "hidden", marginTop: 4, background: fieldSurface }}>
             <span style={{ padding: "10px 12px", background: subtleBg, fontSize: 13, color: textMuted, fontWeight: 600 }}>{symbol}</span>
-            <span style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: textFaint, fontStyle: "italic" }}>
-              {isDonationFlow ? "Or enter any amount" : "Or enter a custom amount"}
-            </span>
+            <input
+              type="number"
+              value={chosenAmount}
+              onChange={e => setChosenAmount?.(e.target.value)}
+              placeholder={isDonationFlow ? "Or enter any amount" : "Or enter a custom amount"}
+              style={{ flex: 1, padding: "10px 12px", fontSize: 13, color: text, border: "none", outline: "none", background: "transparent", fontFamily: "inherit", minWidth: 0 }}
+            />
           </div>
           {(data.minAmount || data.maxAmount) && (
             <p style={{ fontSize: 11, color: textFaint, margin: "2px 0 0" }}>
@@ -508,19 +520,26 @@ function BillingPanel({
       {/* TICKETS — tier cards with capacity */}
       {isTicketsFlow && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {(data.items.filter(t => t.label || t.amount).length === 0 ? [{ label: "General Admission", amount: "0", capacity: "", description: "" }] : data.items).map((t, i) => (
-            <div key={i} style={{ border: `1px solid ${border}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+          {(data.items.filter(t => t.label || t.amount).length === 0 ? [{ label: "General Admission", amount: "0", capacity: "", description: "" }] : data.items).map((t, i) => {
+            const cap = parseInt(t.capacity || "") || Infinity;
+            const cur = qty[i] ?? 0;
+            return (
+            <div key={i} style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, background: fieldSurface }}>
+              {t.image && (
+                <div style={{ width: 40, height: 40, borderRadius: radius.sm, background: `${subtleBg} url(${t.image}) center/contain no-repeat`, border: `1px solid ${fieldBorder}`, flexShrink: 0 }} />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{t.label || `Ticket ${i + 1}`}</p>
-                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} seats` : ""}</p>
+                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} available` : ""}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
-                <button onClick={() => bump(i, -1)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
-                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{qty[i] ?? 0}</span>
-                <button onClick={() => bump(i, 1)} style={{ fontSize: 15, color: data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>+</button>
+                <button onClick={() => bump(i, -1, 0, cap)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{cur}</span>
+                <button onClick={() => bump(i, 1, 0, cap)} disabled={cur >= cap} style={{ fontSize: 15, color: cur >= cap ? textFaint : data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: cur >= cap ? "default" : "pointer", fontFamily: "inherit", lineHeight: 1, opacity: cur >= cap ? 0.4 : 1 }}>+</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -530,10 +549,14 @@ function BillingPanel({
           {(data.items.filter(it => it.label || it.amount).length === 0
             ? [{ label: "Item 1", amount: "0", description: "Add items in the editor to see them here" }]
             : data.items
-          ).map((it, i) => (
-            <div key={i} style={{ border: `1px solid ${border}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+          ).map((it, i) => {
+            const minQ = parseInt((it as any).minQty || "") || 0;
+            const maxQ = parseInt((it as any).maxQty || "") || Infinity;
+            const cur = qty[i] ?? minQ;
+            return (
+            <div key={i} style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, background: fieldSurface }}>
               {it.image && (
-                <div style={{ width: 40, height: 40, borderRadius: radius.sm, background: `url(${it.image}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
+                <div style={{ width: 40, height: 40, borderRadius: radius.sm, background: `${subtleBg} url(${it.image}) center/contain no-repeat`, border: `1px solid ${fieldBorder}`, flexShrink: 0 }} />
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{it.label || `Item ${i + 1}`}</p>
@@ -542,12 +565,13 @@ function BillingPanel({
                 </p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
-                <button onClick={() => bump(i, -1)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
-                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{qty[i] ?? 0}</span>
-                <button onClick={() => bump(i, 1)} style={{ fontSize: 15, color: data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>+</button>
+                <button onClick={() => bump(i, -1, minQ, maxQ)} disabled={cur <= minQ} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: cur <= minQ ? "default" : "pointer", fontFamily: "inherit", lineHeight: 1, opacity: cur <= minQ ? 0.4 : 1 }}>−</button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{cur}</span>
+                <button onClick={() => bump(i, 1, minQ, maxQ)} disabled={cur >= maxQ} style={{ fontSize: 15, color: cur >= maxQ ? textFaint : data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: cur >= maxQ ? "default" : "pointer", fontFamily: "inherit", lineHeight: 1, opacity: cur >= maxQ ? 0.4 : 1 }}>+</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -662,12 +686,18 @@ interface PreviewProps {
   font: string; onBrand: string; btnRadius: number; total: string;
   panelBg?: string; headerBg?: string; dark?: boolean;
   quantities?: Record<number, number>;
-  setQty?: (i: number, delta: number) => void;
+  setQty?: (i: number, delta: number, min?: number, max?: number) => void;
+  chosenAmount?: string;
+  setChosenAmount?: (v: string) => void;
 }
 
 // Live total that respects buyer-selected quantities (multiple-items / tickets).
-function computeTotalLive(data: WizardData, quantities: Record<number, number>): string {
+function computeTotalLive(data: WizardData, quantities: Record<number, number>, chosenAmount?: string): string {
   const sym = getSymbol(data.currency);
+  if (data.amountType === "customer") {
+    const n = parseFloat(chosenAmount || "");
+    return !isNaN(n) && n > 0 ? `${sym}${n.toFixed(2)}` : `${sym}—`;
+  }
   if (data.amountType === "multiple") {
     const items = data.items.filter(it => it.label || it.amount);
     const list = items.length ? items : data.items;
