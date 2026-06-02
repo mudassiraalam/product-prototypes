@@ -49,7 +49,7 @@ export function PagePreview({
   const pageBg = dark ? "#0b1220" : "#f4f6fb";
   const cardBg = dark ? "#151f33" : "#ffffff";
   const subtleBg = dark ? "#1f2c45" : "#eef1f7";
-  const panelBg = dark ? "#1a2540" : "#f4f4f6";  // soft gray-white in light, lighter navy in dark
+  const panelBg = dark ? "#1a2540" : "#f7f7f9";  // soft gray-white (between header tint and gray)
   const headerBg = dark ? "#101a2e" : "#fafbfc"; // faint cool tint, distinct from white body
   const text = dark ? "#f1f5f9" : "#111827";
   const textMuted = dark ? "#94a3b8" : "#6b7280";
@@ -221,13 +221,15 @@ function DesktopPreview(p: PreviewProps) {
           {/* divider */}
           <div style={{ background: border }} />
 
-          {/* RIGHT: billing form */}
-          <div style={{ padding: "24px 28px", background: panelBg }}>
-            <BillingPanel
-              data={data} text={text} textMuted={textMuted} textFaint={textFaint}
-              border={border} subtleBg={cardBg} onBrand={onBrand} btnRadius={btnRadius}
-              total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
-            />
+          {/* RIGHT: billing form — sticky so it stays in view as left content scrolls */}
+          <div style={{ background: panelBg }}>
+            <div style={{ position: "sticky", top: 16, padding: "24px 28px" }}>
+              <BillingPanel
+                data={data} text={text} textMuted={textMuted} textFaint={textFaint}
+                border={border} subtleBg={cardBg} onBrand={onBrand} btnRadius={btnRadius}
+                total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
+              />
+            </div>
           </div>
         </div>
 
