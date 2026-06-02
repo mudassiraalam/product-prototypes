@@ -95,7 +95,7 @@ function DesktopPreview(p: PreviewProps) {
 
   return (
     <div style={{ background: "#f4f6fb", width: "100%", minHeight: "100%", fontFamily: font, padding: "20px 16px 32px" }}>
-      <div style={{ maxWidth: maxW, margin: "0 auto", background: pageBg, borderRadius: radius.lg, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+      <div style={{ maxWidth: maxW, margin: "0 auto", background: pageBg, borderRadius: radius.lg, boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
         {/* ── Optional banner masthead (full-width, only when uploaded) ── */}
         {data.coverImage && (
           <div style={{
