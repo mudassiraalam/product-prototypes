@@ -134,11 +134,11 @@ function DesktopPreview(p: PreviewProps) {
           display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0,
         }}>
           {/* LEFT: full description, contact, social, gallery */}
-          <div style={{ padding: "24px 28px" }}>
+          <div style={{ padding: "24px 28px", minWidth: 0 }}>
             {data.longDescription && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>About</p>
-                <p style={{ fontSize: 13, color: text, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>{data.longDescription}</p>
+                <p style={{ fontSize: 13, color: text, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>{data.longDescription}</p>
               </div>
             )}
 
@@ -222,7 +222,7 @@ function DesktopPreview(p: PreviewProps) {
           <div style={{ background: border }} />
 
           {/* RIGHT: billing form — sticky so it stays in view as left content scrolls */}
-          <div style={{ background: panelBg }}>
+          <div style={{ background: panelBg, minWidth: 0 }}>
             <div style={{ position: "sticky", top: 16, padding: "24px 28px" }}>
               <BillingPanel
                 data={data} text={text} textMuted={textMuted} textFaint={textFaint}
@@ -308,7 +308,7 @@ function MobilePreview(p: PreviewProps) {
             <p style={{ fontSize: 15, fontWeight: 800, color: text, margin: "0 0 6px" }}>{data.title || "Page Title"}</p>
 
             {data.longDescription && (
-              <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, margin: "0 0 14px", whiteSpace: "pre-wrap" }}>{data.longDescription}</p>
+              <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, margin: "0 0 14px", whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>{data.longDescription}</p>
             )}
 
             {(data as any).galleryImages?.length > 0 && (
@@ -395,7 +395,7 @@ function HeaderBlock({
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Brand accent rule */}
         <div style={{ width: 30, height: 3, background: brandColor || data.brandColor, marginBottom: 8 }} />
-        <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, color: text, margin: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+        <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, color: text, margin: 0, overflowWrap: "break-word", wordBreak: "break-word" }}>
           {data.title || (
             data.pageType === "invoice" ? "Invoice"
               : (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
@@ -407,7 +407,7 @@ function HeaderBlock({
           <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>Every contribution counts</p>
         )}
         {data.description && (
-          <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{data.description}</p>
+          <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, margin: "6px 0 0", whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>{data.description}</p>
         )}
       </div>
     </div>
