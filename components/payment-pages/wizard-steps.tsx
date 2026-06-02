@@ -610,7 +610,7 @@ function ItemRow({
             onChange={v => onUpdate({ capacity: v })}
             placeholder="100"
             type="number"
-            hint="Total seats for this tier"
+            hint="Max tickets available for this tier — buyers can't select more than this"
           />
         )}
       </div>
@@ -819,6 +819,9 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
                     <Inp label="Event Date" value={data.eventDate} onChange={v => setData({ ...data, eventDate: v })} type="date" required />
                     <Inp label="Event Time" value={data.eventTime} onChange={v => setData({ ...data, eventTime: v })} type="time" />
                   </div>
+                  {data.eventDate && data.eventDate < new Date().toISOString().slice(0, 10) && (
+                    <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 12px" }}>Event date can't be in the past.</p>
+                  )}
                   <Inp label="Venue" value={data.eventVenue} onChange={v => setData({ ...data, eventVenue: v })} placeholder="e.g. JW Marriott, Bengaluru / Online" />
                 </div>
               )}
