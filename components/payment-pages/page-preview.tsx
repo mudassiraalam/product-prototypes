@@ -44,8 +44,8 @@ export function PagePreview({
   const pageBg = dark ? "#0b1220" : "#f4f6fb";
   const cardBg = dark ? "#151f33" : "#ffffff";
   const subtleBg = dark ? "#1f2c45" : "#eef1f7";
-  const panelBg = dark ? "#1a2540" : "#f1f4fa";  // right column surface (visible but clean)
-  const headerBg = dark ? "#101a2e" : "#f7f9fc"; // header tint
+  const panelBg = dark ? "#1a2540" : "#faf8f3";  // warm cream in light, lighter navy in dark
+  const headerBg = dark ? "#101a2e" : "#ffffff"; // header stays clean/white in light
   const text = dark ? "#f1f5f9" : "#111827";
   const textMuted = dark ? "#94a3b8" : "#6b7280";
   const textFaint = dark ? "#64748b" : "#9ca3af";
@@ -61,7 +61,7 @@ export function PagePreview({
         data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
         text={text} textMuted={textMuted} textFaint={textFaint} border={border}
         font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
-        panelBg={panelBg} headerBg={headerBg}
+        panelBg={panelBg} headerBg={headerBg} dark={dark}
         quantities={quantities} setQty={setQty}
       />
     );
@@ -72,7 +72,7 @@ export function PagePreview({
       data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
       text={text} textMuted={textMuted} textFaint={textFaint} border={border}
       font={font} onBrand={onBrand} btnRadius={btnRadius} total={total}
-      panelBg={panelBg} headerBg={headerBg}
+      panelBg={panelBg} headerBg={headerBg} dark={dark}
       quantities={quantities} setQty={setQty}
     />
   );
@@ -221,7 +221,7 @@ function DesktopPreview(p: PreviewProps) {
             <BillingPanel
               data={data} text={text} textMuted={textMuted} textFaint={textFaint}
               border={border} subtleBg={cardBg} onBrand={onBrand} btnRadius={btnRadius}
-              total={total} quantities={p.quantities} setQty={p.setQty}
+              total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark}
             />
           </div>
         </div>
@@ -356,7 +356,7 @@ function MobilePreview(p: PreviewProps) {
               <BillingPanel
                 data={data} text={text} textMuted={textMuted} textFaint={textFaint}
                 border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
-                total={total} compact quantities={p.quantities} setQty={p.setQty}
+                total={total} compact quantities={p.quantities} setQty={p.setQty} dark={p.dark}
               />
             </div>
           </div>
@@ -411,18 +411,21 @@ function HeaderBlock({
 // Billing panel — type-aware
 // ──────────────────────────────────────────────────────────────────────────────
 function BillingPanel({
-  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty,
+  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty, dark,
 }: {
   data: WizardData; text: string; textMuted: string; textFaint: string; border: string;
   subtleBg: string; onBrand: string; btnRadius: number; total: string; compact?: boolean;
   quantities?: Record<number, number>; setQty?: (i: number, delta: number) => void;
+  dark?: boolean;
 }) {
   const qty = quantities ?? {};
   const bump = setQty ?? (() => {});
   const symbol = getSymbol(data.currency);
+  const fieldSurface = dark ? "rgba(255,255,255,0.05)" : "#ffffff";
+  const fieldBorder = dark ? "rgba(255,255,255,0.14)" : "#d6dbe5";
   const inputStyle: React.CSSProperties = {
-    width: "100%", padding: compact ? "9px 11px" : "10px 13px", border: `1px solid ${border}`,
-    borderRadius: radius.sm, fontSize: 13, color: textMuted, background: "transparent",
+    width: "100%", padding: compact ? "9px 11px" : "10px 13px", border: `1px solid ${fieldBorder}`,
+    borderRadius: radius.sm, fontSize: 13, color: textMuted, background: fieldSurface,
     boxSizing: "border-box", fontFamily: "inherit",
   };
 
@@ -657,7 +660,7 @@ interface PreviewProps {
   pageBg: string; cardBg: string; subtleBg: string;
   text: string; textMuted: string; textFaint: string; border: string;
   font: string; onBrand: string; btnRadius: number; total: string;
-  panelBg?: string; headerBg?: string;
+  panelBg?: string; headerBg?: string; dark?: boolean;
   quantities?: Record<number, number>;
   setQty?: (i: number, delta: number) => void;
 }
