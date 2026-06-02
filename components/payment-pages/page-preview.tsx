@@ -50,7 +50,7 @@ export function PagePreview({
   const cardBg = dark ? "#151f33" : "#ffffff";
   const subtleBg = dark ? "#1f2c45" : "#eef1f7";
   const panelBg = dark ? "#1a2540" : "#f4f4f6";  // soft gray-white in light, lighter navy in dark
-  const headerBg = dark ? "#101a2e" : "#ffffff"; // header stays clean/white in light
+  const headerBg = dark ? "#101a2e" : "#fafbfc"; // faint cool tint, distinct from white body
   const text = dark ? "#f1f5f9" : "#111827";
   const textMuted = dark ? "#94a3b8" : "#6b7280";
   const textFaint = dark ? "#64748b" : "#9ca3af";
