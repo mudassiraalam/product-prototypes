@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import { StatusBadge, Btn } from "./primitives";
-import { INITIAL_PAGES, PaymentPage, PageStatus, PageType } from "./mock-data";
+import { INITIAL_PAGES, PaymentPage, PageStatus, PageType, DASHBOARD_METRICS } from "./mock-data";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Type-level colors (primary). Kind-level icons/colors come from getKindInfo().
@@ -27,19 +27,105 @@ function getKindInfo(page: PaymentPage): KindInfo {
   return { label: "Fixed Price", icon: "💳", color: "#1c5af4" };
 }
 
-function StatCard({ label, value, sub, color, icon }: {
-  label: string; value: string; sub?: string; color: string; icon: string;
-}) {
+// ──────────────────────────────────────────────────────────────────────────────
+// Sparkline — builds a smooth-ish area + line from a 0..N series. Used by the
+// two "graph" stat cards (Total Revenue, Failed). viewBox is fixed; the path
+// is normalised to the series min/max so the shape fills the card height.
+// ──────────────────────────────────────────────────────────────────────────────
+function Sparkline({ data, stroke, fill }: { data: readonly number[]; stroke: string; fill: string }) {
+  const W = 220, H = 52, pad = 4;
+  const min = Math.min(...data), max = Math.max(...data);
+  const span = max - min || 1;
+  const stepX = (W - pad * 2) / (data.length - 1);
+  const pts = data.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = pad + (H - pad * 2) * (1 - (v - min) / span);
+    return [x, y];
+  });
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
   return (
-    <div style={{ background: C.white, borderRadius: radius.lg, padding: "18px 20px", border: `1.5px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 14 }}>
-      <div style={{ width: 44, height: 44, borderRadius: radius.md, background: color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20 }}>
-        {icon}
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 46, display: "block" }}>
+      <path d={area} fill={fill} />
+      <path d={line} fill="none" stroke={stroke} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Delta chip — small "▲ 18% vs last 7d avg" pill. `positive` controls colour,
+// and for "bad" metrics (Failed) the caller flips it so a falling number reads
+// green. The arrow direction follows the sign of the actual delta.
+function DeltaChip({ deltaPct, positive }: { deltaPct: number; positive: boolean }) {
+  const up = deltaPct >= 0;
+  const c = positive ? C.green : C.red;
+  const bg = positive ? C.greenBg : C.redBg;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: bg, color: c, fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: radius.sm }}>
+        {up ? "▲" : "▼"} {Math.abs(deltaPct)}%
+      </span>
+      <span style={{ fontSize: 11, color: C.textFaint }}>vs last 7d avg</span>
+    </div>
+  );
+}
+
+// Unified stat card. Every card shares the same chrome: a coloured left accent
+// bar, an uppercase label with a help "?" affordance, and a large value. The
+// body below the value is one of two shapes:
+//   • variant="graph"     → sparkline + delta chip   (Total Revenue, Failed)
+//   • variant="breakdown" → list of label/value rows (Total Pages, Successful Payments)
+// All cards are the same fixed min-height so the 2-graph / 2-breakdown mix reads
+// as intentional rhythm rather than "two cards failed to load".
+type BreakdownRow = { label: string; value: string; dot?: string };
+function StatCard(props: {
+  label: string;
+  value: string;
+  accent: string;
+  variant: "graph" | "breakdown";
+  // graph:
+  trend?: readonly number[];
+  trendStroke?: string;
+  trendFill?: string;
+  deltaPct?: number;
+  deltaPositive?: boolean;
+  // breakdown:
+  rows?: BreakdownRow[];
+}) {
+  const { label, value, accent, variant } = props;
+  return (
+    <div style={{
+      background: C.white, borderRadius: radius.lg, padding: "16px 18px",
+      border: `1.5px solid ${C.border}`, borderLeft: `3px solid ${accent}`,
+      minHeight: 172, display: "flex", flexDirection: "column",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</span>
+        <span style={{ width: 14, height: 14, borderRadius: "50%", border: `1.2px solid ${C.textFaint}`, color: C.textFaint, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", lineHeight: 1 }}>?</span>
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 11, color: C.textMuted, margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{label}</p>
-        <p style={{ fontSize: 22, fontWeight: 800, color, margin: "0 0 2px", lineHeight: 1 }}>{value}</p>
-        {sub && <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{sub}</p>}
-      </div>
+      <p style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 12px", lineHeight: 1 }}>{value}</p>
+
+      {variant === "graph" && (
+        <div style={{ marginTop: "auto" }}>
+          <Sparkline data={props.trend!} stroke={props.trendStroke!} fill={props.trendFill!} />
+          <div style={{ marginTop: 10 }}>
+            <DeltaChip deltaPct={props.deltaPct!} positive={props.deltaPositive!} />
+          </div>
+        </div>
+      )}
+
+      {variant === "breakdown" && (
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 7 }}>
+          {props.rows!.map(r => (
+            <div key={r.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: C.textMuted }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                {r.dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: r.dot, flexShrink: 0 }} />}
+                {r.label}
+              </span>
+              <span style={{ color: C.text, fontWeight: 600 }}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -55,31 +141,72 @@ export function Dashboard({ onCreate, onView }: {
 }) {
   const [pages, setPages] = useState<PaymentPage[]>(INITIAL_PAGES);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  // Single source of truth for the status tab row. "Archived" is now one of the
+  // tabs (it replaces the old footer toggle), so the dashboard never needs a
+  // separate showArchived flag — selecting the Archived tab shows only archived
+  // pages, any other tab hides them.
+  const [statusTab, setStatusTab] = useState<"All" | PageStatus>("All");
   const [typeFilter, setTypeFilter] = useState("All");
-  const [view, setView] = useState<"table" | "grid">("table");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  // Archived view: by default, archived pages are hidden from the main dashboard.
-  // Toggling this state flips the view to show ONLY archived pages — same pattern
-  // as Razorpay's "Archived" tab and Stripe's archive-toggle for products.
-  const [showArchived, setShowArchived] = useState(false);
+  // Sort state for click-to-sort columns (Created / Views / Payments / Revenue).
+  const [sort, setSort] = useState<{ key: "created" | "views" | "payments" | "revenue"; dir: "asc" | "desc" }>({ key: "created", dir: "desc" });
+
+  const showArchived = statusTab === "Archived";
+
+  // A page is parsed for its numeric revenue for both the total and sorting.
+  const revenueOf = (p: PaymentPage) => parseFloat(p.revenue.replace(/[₹,]/g, "")) || 0;
+  // Created strings look like "15 Nov 2024, 10:30" — Date.parse handles them
+  // well enough for prototype sorting.
+  const createdOf = (p: PaymentPage) => Date.parse(p.created.replace(",", "")) || 0;
 
   const filtered = pages.filter(p => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "All" || p.status === statusFilter;
     const matchType = typeFilter === "All" || p.type === typeFilter;
-    const matchArchive = showArchived ? p.status === "Archived" : p.status !== "Archived";
-    return matchSearch && matchStatus && matchType && matchArchive;
+    // The Archived tab shows ONLY archived pages; every other tab hides them.
+    // "All" shows everything except archived. A specific status tab matches it.
+    const matchTab =
+      statusTab === "Archived" ? p.status === "Archived"
+      : statusTab === "All" ? p.status !== "Archived"
+      : p.status === statusTab;
+    return matchSearch && matchType && matchTab;
   });
 
-  const archivedCount = pages.filter(p => p.status === "Archived").length;
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    let av: number, bv: number;
+    if (sort.key === "created") { av = createdOf(a); bv = createdOf(b); }
+    else if (sort.key === "revenue") { av = revenueOf(a); bv = revenueOf(b); }
+    else { av = a[sort.key]; bv = b[sort.key]; }
+    return (av - bv) * dir;
+  });
+
+  // Counts per tab — shown as the little number beside each tab label. Computed
+  // off the search+type filtered set (minus the status dimension) so the counts
+  // reflect what the user would actually see when they click each tab.
+  const tabBase = pages.filter(p =>
+    (p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase()))
+    && (typeFilter === "All" || p.type === typeFilter)
+  );
+  const tabCounts: Record<string, number> = {
+    All: tabBase.filter(p => p.status !== "Archived").length,
+    Active: tabBase.filter(p => p.status === "Active").length,
+    Inactive: tabBase.filter(p => p.status === "Inactive").length,
+    Draft: tabBase.filter(p => p.status === "Draft").length,
+    Expired: tabBase.filter(p => p.status === "Expired").length,
+    Archived: tabBase.filter(p => p.status === "Archived").length,
+  };
+  const STATUS_TABS: ("All" | PageStatus)[] = ["All", "Active", "Inactive", "Draft", "Expired", "Archived"];
+
+  const toggleSort = (key: "created" | "views" | "payments" | "revenue") => {
+    setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" });
+  };
 
   // CSV export — downloads the currently filtered view. Matches the pattern
   // used by Stripe (Export current view) and Razorpay (Download as CSV).
   const exportCsv = () => {
     const headers = ["ID", "Title", "Slug", "Type", "Amount", "Views", "Payments", "Revenue", "Status", "Created"];
-    const rows = filtered.map(p => [p.id, p.title, p.slug, p.type, p.amount, p.views, p.payments, p.revenue, p.status, p.created]);
+    const rows = sorted.map(p => [p.id, p.title, p.slug, p.type, p.amount, p.views, p.payments, p.revenue, p.status, p.created]);
     const escape = (v: string | number) => {
       const s = String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -121,6 +248,15 @@ export function Dashboard({ onCreate, onView }: {
 
   return (
     <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto" }}>
+      {/* Breadcrumb */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, fontSize: 13 }}>
+        <span style={{ color: C.textMuted, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <span style={{ fontSize: 14 }}>⌂</span> Home
+        </span>
+        <span style={{ color: C.textFaint }}>/</span>
+        <span style={{ color: C.text, fontWeight: 600 }}>Payment Pages</span>
+      </div>
+
       {/* Page header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div>
@@ -134,17 +270,83 @@ export function Dashboard({ onCreate, onView }: {
         </Btn>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — 2 graph cards (Revenue, Failed) + 2 breakdown cards
+          (Total Pages, Successful Payments). Order matches the production
+          reference: inventory → money in → volume → money at risk. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-        <StatCard label="Total Pages" value={pages.length.toString()} sub="All time" color={C.blue} icon="📄" />
-        <StatCard label="Active Pages" value={pages.filter(p => p.status === "Active").length.toString()} sub="Accepting payments" color={C.green} icon="✅" />
-        <StatCard label="Payments Received" value={pages.reduce((a, p) => a + p.payments, 0).toLocaleString()} sub="Successful transactions" color="#7c3aed" icon="💰" />
-        <StatCard label="Total Revenue" value={formatRevenue(totalRevenue)} sub="Via payment pages" color={C.amber} icon="📈" />
+        <StatCard
+          label="Total Pages"
+          value={pages.length.toString()}
+          accent={C.blue}
+          variant="breakdown"
+          rows={[
+            { label: "Active", value: pages.filter(p => p.status === "Active").length.toString(), dot: C.green },
+            { label: "Draft", value: pages.filter(p => p.status === "Draft").length.toString(), dot: C.amber },
+            { label: "Inactive", value: pages.filter(p => p.status === "Inactive").length.toString(), dot: C.textMuted },
+          ]}
+        />
+        <StatCard
+          label="Total Revenue"
+          value={formatRevenue(totalRevenue)}
+          accent={C.blue}
+          variant="graph"
+          trend={DASHBOARD_METRICS.revenueTrend}
+          trendStroke={C.blue}
+          trendFill={C.blueLight}
+          deltaPct={DASHBOARD_METRICS.revenueDeltaPct}
+          deltaPositive={DASHBOARD_METRICS.revenueDeltaPct >= 0}
+        />
+        <StatCard
+          label="Successful Payments"
+          value={DASHBOARD_METRICS.successfulPayments.toLocaleString()}
+          accent={C.green}
+          variant="breakdown"
+          rows={DASHBOARD_METRICS.methodSplit.map(m => ({ label: m.method, value: `${m.pct}%` }))}
+        />
+        <StatCard
+          label="Failed"
+          value={DASHBOARD_METRICS.failed.toLocaleString()}
+          accent={C.red}
+          variant="graph"
+          trend={DASHBOARD_METRICS.failedTrend}
+          trendStroke={C.red}
+          trendFill={C.redBg}
+          deltaPct={DASHBOARD_METRICS.failedDeltaPct}
+          /* colour-flip: failures FALLING is GOOD → render green */
+          deltaPositive={DASHBOARD_METRICS.failedDeltaPct <= 0}
+        />
       </div>
 
       {/* Table card */}
       <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "visible", boxShadow: shadow.sm }}>
-        {/* Toolbar */}
+        {/* Status tabs — count-pills, the primary status filter. Archived is
+            included here as the rightmost tab (it replaces the old footer
+            toggle). The active tab gets a blue underline + blue text. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 12px", borderBottom: `1px solid ${C.borderLight}`, overflowX: "auto" }}>
+          {STATUS_TABS.map(tab => {
+            const isActive = statusTab === tab;
+            return (
+              <button key={tab} onClick={() => setStatusTab(tab)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 7, padding: "13px 12px", background: "none", border: "none",
+                  borderBottom: `2px solid ${isActive ? C.blue : "transparent"}`, cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? C.blue : C.textMuted, whiteSpace: "nowrap",
+                  marginBottom: -1,
+                }}>
+                {tab}
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: radius.full,
+                  background: isActive ? C.blueLight : C.bg, color: isActive ? C.blue : C.textMuted,
+                }}>
+                  {tabCounts[tab]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Toolbar — search + type filter + export. (Status moved to the tabs
+            above; the list/grid view toggle was removed to match production.) */}
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
             <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
@@ -153,10 +355,6 @@ export function Dashboard({ onCreate, onView }: {
                 placeholder="Search by title, slug or ID..."
                 style={{ ...baseInp, width: "100%", paddingLeft: 32 }} />
             </div>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...baseInp }}>
-              <option value="All">All Status</option>
-              {["Active", "Inactive", "Draft", "Expired"].map(s => <option key={s}>{s}</option>)}
-            </select>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...baseInp }}>
               <option value="All">All Types</option>
               <option value="Standard Page">Standard Page</option>
@@ -179,36 +377,56 @@ export function Dashboard({ onCreate, onView }: {
                     📄 Download as CSV
                   </div>
                   <p style={{ fontSize: 11, color: C.textFaint, margin: "4px 8px 2px", lineHeight: 1.4 }}>
-                    Exports {filtered.length} page{filtered.length === 1 ? "" : "s"} matching your current filters.
+                    Exports {sorted.length} page{sorted.length === 1 ? "" : "s"} matching your current filters.
                   </p>
                 </div>
               )}
             </div>
-            {/* View toggle */}
-            <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: radius.md, padding: 3 }}>
-              {([["table", "☰"], ["grid", "⊞"]] as const).map(([k, icon]) => (
-                <button key={k} onClick={() => setView(k)}
-                  style={{ width: 32, height: 28, border: "none", borderRadius: radius.sm, cursor: "pointer", background: view === k ? C.white : "transparent", color: view === k ? C.text : C.textMuted, boxShadow: view === k ? shadow.sm : "none", fontFamily: "inherit", fontSize: 14 }}>
-                  {icon}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
-        {/* Table view */}
-        {view === "table" && (
+        {/* Table */}
+        {(
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: C.bg }}>
-                  {["Page", "Type", "Amount", "Views", "Payments", "Revenue", "Status", "Created", "Actions"].map(h => (
-                    <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
+                  {([
+                    { label: "Page", key: null },
+                    { label: "Type", key: null },
+                    { label: "Amount", key: null },
+                    { label: "Views", key: "views" as const },
+                    { label: "Payments", key: "payments" as const },
+                    { label: "Revenue", key: "revenue" as const },
+                    { label: "Status", key: null },
+                    { label: "Created", key: "created" as const },
+                    { label: "Actions", key: null },
+                  ]).map(col => {
+                    const sortable = col.key !== null;
+                    const isSorted = sortable && sort.key === col.key;
+                    return (
+                      <th key={col.label}
+                        onClick={sortable ? () => toggleSort(col.key!) : undefined}
+                        style={{
+                          padding: "10px 16px", fontSize: 11, fontWeight: 700, color: isSorted ? C.text : C.textMuted,
+                          textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap",
+                          cursor: sortable ? "pointer" : "default", userSelect: "none",
+                        }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          {col.label}
+                          {sortable && (
+                            <span style={{ fontSize: 9, color: isSorted ? C.blue : C.textFaint }}>
+                              {isSorted ? (sort.dir === "asc" ? "▲" : "▼") : "⇅"}
+                            </span>
+                          )}
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {sorted.length === 0 ? (
                   <tr>
                     <td colSpan={9} style={{ padding: "48px", textAlign: "center" }}>
                       <p style={{ fontSize: 15, color: C.textMuted, margin: "0 0 6px" }}>
@@ -219,7 +437,7 @@ export function Dashboard({ onCreate, onView }: {
                       </p>
                     </td>
                   </tr>
-                ) : filtered.map(page => {
+                ) : sorted.map(page => {
                   const kind = getKindInfo(page);
                   const typeColor = TYPE_COLORS[page.type];
                   return (
@@ -310,58 +528,13 @@ export function Dashboard({ onCreate, onView }: {
           </div>
         )}
 
-        {/* Grid view */}
-        {view === "grid" && (
-          <div style={{ padding: 20, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            {filtered.map(page => {
-              const kind = getKindInfo(page);
-              return (
-              <div key={page.id} style={{ border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden", background: C.white, transition: "box-shadow 0.15s" }}
-                onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.boxShadow = shadow.md)}
-                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.boxShadow = "none")}>
-                {/* Mini header preview */}
-                <div style={{ height: 8, background: page.brandColor }} />
-                <div style={{ padding: "16px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: radius.md, background: kind.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                      {kind.icon}
-                    </div>
-                    <StatusBadge status={page.status} />
-                  </div>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 2px", lineHeight: 1.3 }}>{page.title}</p>
-                  <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 4px", fontFamily: "monospace" }}>/{page.slug}</p>
-                  <p style={{ fontSize: 11, color: kind.color, margin: "0 0 12px", fontWeight: 600 }}>{page.type}</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-                    {[["Views", page.views.toLocaleString()], ["Payments", page.payments.toString()], ["Revenue", page.revenue]].map(([l, v]) => (
-                      <div key={l} style={{ background: C.bg, borderRadius: radius.sm, padding: "6px 8px", textAlign: "center" }}>
-                        <p style={{ fontSize: 10, color: C.textFaint, margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{l}</p>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: C.text, margin: 0 }}>{v}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => onView(page)} style={{ flex: 1, padding: "7px", background: C.blueLight, color: C.blue, border: "none", borderRadius: radius.sm, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>View</button>
-                    <button onClick={() => navigator.clipboard.writeText(`pay.enkash.in/${page.slug}`)} style={{ padding: "7px 10px", background: C.bg, border: "none", borderRadius: radius.sm, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>📋</button>
-                  </div>
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Footer */}
+        {/* Footer — simple count. The archived view is now reached via the
+            Archived status tab above, so the old footer toggle was removed. */}
         <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: C.textFaint }}>
-            Showing <strong style={{ color: C.textSecondary }}>{filtered.length}</strong>{" "}
-            {showArchived ? "archived" : ""} page{filtered.length === 1 ? "" : "s"}
+            Showing <strong style={{ color: C.textSecondary }}>{sorted.length}</strong>{" "}
+            {showArchived ? "archived " : ""}page{sorted.length === 1 ? "" : "s"}
           </span>
-          <button onClick={() => setShowArchived(s => !s)}
-            style={{ fontSize: 12, color: C.blue, cursor: "pointer", fontWeight: 600, background: "none", border: "none", fontFamily: "inherit", padding: 0 }}>
-            {showArchived
-              ? "← Back to active pages"
-              : `View archived pages${archivedCount > 0 ? ` (${archivedCount})` : ""} →`}
-          </button>
         </div>
       </div>
     </div>
