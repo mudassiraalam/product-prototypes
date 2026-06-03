@@ -157,6 +157,35 @@ export const INITIAL_PAGES: PaymentPage[] = [
   },
 ];
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Dashboard headline metrics.
+// These are illustrative figures for the prototype — they are NOT derived from
+// the page rows above. In production these come from the payments/analytics
+// service. The two sparkline series are 7-point (last 7 days) trends used by the
+// Total Revenue and Failed stat cards.
+// ──────────────────────────────────────────────────────────────────────────────
+export const DASHBOARD_METRICS = {
+  // Successful payments — count + method split (shown as the breakdown card).
+  successfulPayments: 1705,
+  methodSplit: [
+    { method: "UPI", pct: 61 },
+    { method: "Cards", pct: 24 },
+    { method: "Netbanking", pct: 15 },
+  ],
+
+  // Failed payments — count + 7d delta. Delta is negative (fewer failures),
+  // which is GOOD news, so the card renders it green with a down arrow.
+  failed: 182,
+  failedDeltaPct: -4,
+  // Trend FALLS left→right so the line agrees with the "down 4%" chip.
+  failedTrend: [58, 54, 49, 47, 41, 38, 34],
+
+  // Total revenue — 7d delta is positive (more revenue), rendered green/up.
+  revenueDeltaPct: 18,
+  // Trend RISES left→right to agree with the "up 18%" chip.
+  revenueTrend: [22, 26, 31, 38, 44, 52, 61],
+} as const;
+
 export const TRANSACTIONS = [
   { id: "TXN-001", customer: "Rahul Sharma", email: "rahul@example.com", amount: "₹2,999", status: "Success", date: "28 Dec 2024, 11:22" },
   { id: "TXN-002", customer: "Priya Mehta", email: "priya.m@gmail.com", amount: "₹2,999", status: "Success", date: "27 Dec 2024, 15:07" },
