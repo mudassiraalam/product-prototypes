@@ -177,13 +177,13 @@ export const DASHBOARD_METRICS = {
   // which is GOOD news, so the card renders it green with a down arrow.
   failed: 182,
   failedDeltaPct: -4,
-  // Trend wiggles but TRENDS DOWN overall so the line agrees with "down 4%".
-  failedTrend: [44, 47, 41, 49, 38, 42, 34],
+  // Sharp peaks/valleys, TRENDING DOWN overall to agree with "down 4%".
+  failedTrend: [40, 52, 38, 48, 33, 44, 30],
 
   // Total revenue — 7d delta is positive (more revenue), rendered green/up.
   revenueDeltaPct: 18,
-  // Trend wiggles but TRENDS UP overall so the line agrees with "up 18%".
-  revenueTrend: [30, 26, 38, 34, 47, 52, 61],
+  // Sharp peaks/valleys, TRENDING UP overall to agree with "up 18%".
+  revenueTrend: [28, 22, 40, 32, 50, 42, 60],
 } as const;
 
 export const TRANSACTIONS = [
