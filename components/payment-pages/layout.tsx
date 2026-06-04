@@ -114,12 +114,17 @@ function HeaderIconBtn({ children, dot }: { children: ReactNode; dot?: boolean }
   );
 }
 
-export function TopNav({ breadcrumb }: { breadcrumb?: Crumb[] }) {
+export function TopNav({ breadcrumb, onHome }: { breadcrumb?: Crumb[]; onHome?: () => void }) {
   return (
     <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: "0 24px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: shadow.sm }}>
       {/* Left: logo + (optional) breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          onClick={onHome}
+          role={onHome ? "button" : undefined}
+          title={onHome ? "Go to dashboard" : undefined}
+          style={{ display: "flex", alignItems: "center", gap: 10, cursor: onHome ? "pointer" : "default" }}
+        >
           <div style={{ width: 32, height: 32, background: C.blue, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ color: C.white, fontWeight: 800, fontSize: 14 }}>E</span>
           </div>
