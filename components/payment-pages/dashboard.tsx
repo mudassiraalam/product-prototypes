@@ -28,9 +28,9 @@ function getKindInfo(page: PaymentPage): KindInfo {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Sparkline — smooth (Catmull-Rom → bezier) area + line from a numeric series.
-// Used by the two "graph" stat cards (Total Revenue, Failed). The curve makes
-// the wiggle read naturally instead of as sharp zig-zags.
+// Sparkline — straight line segments point-to-point (sharp peaks/valleys, like
+// the production cards in image 2), with an area fill underneath. Used by the
+// two "graph" stat cards (Total Revenue, Failed).
 // ──────────────────────────────────────────────────────────────────────────────
 function Sparkline({ data, stroke, fill }: { data: readonly number[]; stroke: string; fill: string }) {
   const W = 240, H = 44, pad = 5;
@@ -38,20 +38,7 @@ function Sparkline({ data, stroke, fill }: { data: readonly number[]; stroke: st
   const span = max - min || 1;
   const stepX = (W - pad * 2) / (data.length - 1);
   const pts = data.map((v, i) => [pad + i * stepX, pad + (H - pad * 2) * (1 - (v - min) / span)] as [number, number]);
-
-  // Smooth path via Catmull-Rom converted to cubic beziers.
-  let line = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    line += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-  }
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
   const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 40, display: "block" }}>
@@ -77,7 +64,8 @@ function DeltaChip({ deltaPct, positive }: { deltaPct: number; positive: boolean
   );
 }
 
-// Help "?" with a real hover tooltip explaining the metric.
+// Help "?" with a real hover tooltip explaining the metric. Renders BELOW the
+// dot so the scroll container's top edge never clips it.
 function HelpDot({ tip }: { tip: string }) {
   const [show, setShow] = useState(false);
   return (
@@ -85,9 +73,9 @@ function HelpDot({ tip }: { tip: string }) {
       onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       <span style={{ width: 14, height: 14, borderRadius: "50%", border: `1.2px solid ${C.textFaint}`, color: C.textFaint, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", lineHeight: 1 }}>?</span>
       {show && (
-        <span style={{ position: "absolute", bottom: "calc(100% + 7px)", left: "50%", transform: "translateX(-50%)", width: 200, background: C.navy, color: C.white, fontSize: 11.5, fontWeight: 500, lineHeight: 1.5, padding: "8px 10px", borderRadius: radius.md, boxShadow: shadow.lg, zIndex: 60, textTransform: "none", letterSpacing: 0 }}>
+        <span style={{ position: "absolute", top: "calc(100% + 7px)", left: "50%", transform: "translateX(-50%)", width: 200, background: C.navy, color: C.white, fontSize: 11.5, fontWeight: 500, lineHeight: 1.5, padding: "8px 10px", borderRadius: radius.md, boxShadow: shadow.lg, zIndex: 60, textTransform: "none", letterSpacing: 0 }}>
+          <span style={{ position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: `5px solid ${C.navy}` }} />
           {tip}
-          <span style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: `5px solid ${C.navy}` }} />
         </span>
       )}
     </span>
