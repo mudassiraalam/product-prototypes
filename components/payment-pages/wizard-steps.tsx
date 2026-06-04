@@ -99,6 +99,10 @@ export interface WizardData {
   galleryImages: string[];
   termsText: string;
 
+  // Payment methods offered on the page (merchant-configurable; company-level
+  // gating over which merchants may enable which methods is a separate backend concern)
+  paymentMethods: PaymentMethod[];
+
   // Settings - Publish
   expiryDate: string;
   maxPayments: string;
@@ -106,8 +110,20 @@ export interface WizardData {
   redirectUrl: string;
   sendReceipt: boolean;
   webhookUrl: string;
-  capturePayment: boolean;
+
+  // Internal UI state — true once the merchant manually edits the slug, after
+  // which we stop auto-syncing it from the title.
+  slugTouched?: boolean;
 }
+
+export type PaymentMethod = "upi" | "cards" | "netbanking" | "wallets";
+
+export const ALL_PAYMENT_METHODS: { key: PaymentMethod; label: string }[] = [
+  { key: "upi", label: "UPI" },
+  { key: "cards", label: "Cards" },
+  { key: "netbanking", label: "Net Banking" },
+  { key: "wallets", label: "Wallets" },
+];
 
 export const DEFAULT_WIZARD: WizardData = {
   pageType: "page",
@@ -174,13 +190,14 @@ export const DEFAULT_WIZARD: WizardData = {
   socialFacebook: "",
   socialLinkedin: "",
 
+  paymentMethods: ["upi", "cards", "netbanking", "wallets"],
+
   expiryDate: "",
   maxPayments: "",
   successMessage: "",
   redirectUrl: "",
   sendReceipt: true,
   webhookUrl: "",
-  capturePayment: true,
 };
 
 const FIELD_TYPES = [
@@ -191,6 +208,21 @@ const FIELD_TYPES = [
   { value: "textarea", label: "Multi-line Text" }, { value: "date", label: "Date" },
   { value: "number", label: "Number" }, { value: "dropdown", label: "Dropdown" },
 ];
+
+// Add or remove a required PAN field in response to the donation/80G/PAN toggles.
+// Deduped: never adds a second PAN field if one already exists; only strips the
+// auto-added one (default "PAN Number" label) when PAN collection is turned off.
+type CFields = WizardData["customerFields"];
+function syncPanField(fields: CFields, wantPan: boolean): CFields {
+  const hasPan = fields.some(f => f.type === "pan");
+  if (wantPan && !hasPan) {
+    return [...fields, { type: "pan", label: "PAN Number", optional: false }];
+  }
+  if (!wantPan && hasPan) {
+    return fields.filter(f => !(f.type === "pan" && f.label === "PAN Number"));
+  }
+  return fields;
+}
 
 // ── Crop Modal (whole image visible + dimmed mask + bright keep-frame) ──────────
 function CropModal({
@@ -682,7 +714,12 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
       </p>
 
       <SectionCard title="Basics">
-        <Inp label="Page Title" value={data.title} onChange={v => setData({ ...data, title: v })} placeholder="e.g. Bluetooth Headphones" required />
+        <Inp label="Page Title" value={data.title} onChange={v => setData({
+          ...data,
+          title: v,
+          // Keep the URL slug in sync with the title until the merchant edits it directly.
+          pageSlug: data.slugTouched ? data.pageSlug : v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40),
+        })} placeholder="e.g. Bluetooth Headphones" required />
         <Textarea label="Short Description" value={data.description} onChange={v => setData({ ...data, description: v })} placeholder="A one-line summary shown under your page title." rows={2} hint="Keep it short — a sentence or two. Add a full description with features in Page Info below." />
       </SectionCard>
 
@@ -774,7 +811,7 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
             <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.border}` }}>
               <Toggle
                 checked={data.isDonation}
-                onChange={v => setData({ ...data, isDonation: v, is80G: v ? data.is80G : false, collectPan: v ? data.collectPan : false })}
+                onChange={v => setData({ ...data, isDonation: v, is80G: v ? data.is80G : false, collectPan: v ? data.collectPan : false, customerFields: syncPanField(data.customerFields, v ? data.collectPan : false) })}
                 label="Donation page (enables 80G)"
                 desc="Marks this as a donation, unlocking India-specific compliance options below"
               />
@@ -783,13 +820,13 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
                 <div style={{ marginTop: 6, paddingLeft: 4 }}>
                   <Toggle
                     checked={data.is80G}
-                    onChange={v => setData({ ...data, is80G: v, collectPan: v ? true : data.collectPan })}
+                    onChange={v => setData({ ...data, is80G: v, collectPan: v ? true : data.collectPan, customerFields: syncPanField(data.customerFields, v ? true : data.collectPan) })}
                     label="Generate 80G tax receipts"
                     desc="Donors get automatic 80G receipts and can claim tax benefits"
                   />
                   <Toggle
                     checked={data.collectPan}
-                    onChange={v => setData({ ...data, collectPan: v })}
+                    onChange={v => setData({ ...data, collectPan: v, customerFields: syncPanField(data.customerFields, v) })}
                     label="Collect PAN from donors"
                     desc="Required for 80G receipts and donations above ₹50,000"
                   />
@@ -1120,11 +1157,38 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
         <Inp
           label="Custom URL"
           value={data.pageSlug}
-          onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
+          onChange={v => setData({ ...data, pageSlug: v.toLowerCase().replace(/[^a-z0-9-]/g, "-"), slugTouched: true })}
           placeholder="bluetooth-headphones"
           prefix="pay.enkash.in/"
           hint={`Your page will be available at pay.enkash.in/${slugAuto || "your-slug"}`}
         />
+      </SectionCard>
+
+      <SectionCard title="Payment Methods">
+        <p style={{ fontSize: 12, color: C.textMuted, margin: "0 0 12px", lineHeight: 1.5 }}>
+          Choose which methods customers can pay with. At least one must stay enabled.
+        </p>
+        {ALL_PAYMENT_METHODS.map(m => {
+          const enabled = data.paymentMethods.includes(m.key);
+          const isLastOn = enabled && data.paymentMethods.length === 1;
+          return (
+            <Toggle
+              key={m.key}
+              checked={enabled}
+              onChange={v => {
+                if (!v && isLastOn) return; // never allow zero methods
+                const next = v
+                  ? [...data.paymentMethods, m.key]
+                  : data.paymentMethods.filter(k => k !== m.key);
+                // Preserve canonical order so the page renders them consistently.
+                const ordered = ALL_PAYMENT_METHODS.map(x => x.key).filter(k => next.includes(k));
+                setData({ ...data, paymentMethods: ordered });
+              }}
+              label={m.label}
+              desc={isLastOn ? "Can't disable — at least one method is required" : undefined}
+            />
+          );
+        })}
       </SectionCard>
 
       <SectionCard title="Limits & Expiry">
@@ -1163,4 +1227,73 @@ export function getStepsForType(type: PageType): { key: string; label: string }[
     { key: "customization", label: "Customization" },
     { key: "settings", label: "Settings & Publish" },
   ];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Publish-time validation — runs once when the merchant clicks "Publish Page".
+// Returns one error per problem, tagged with the step index it lives on so the
+// wizard can jump the user straight to the fix. Per-step "Continue" stays free.
+// ──────────────────────────────────────────────────────────────────────────────
+export interface ValidationError { step: number; message: string; }
+
+const isValidUrlStr = (u: string) => { try { new URL(u); return true; } catch { return false; } };
+
+export function validateWizard(data: WizardData): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const STEP_DETAILS = 0, STEP_FIELDS = 1, STEP_SETTINGS = 3;
+
+  // ── Step 1: Details ──
+  if (!data.title.trim()) {
+    errors.push({ step: STEP_DETAILS, message: "Add a page title." });
+  }
+
+  if (data.pageType === "invoice") {
+    const hasLine = data.lineItems.some(li => li.description.trim() && parseFloat(li.unitPrice || "0") > 0);
+    if (!hasLine) errors.push({ step: STEP_DETAILS, message: "Add at least one invoice line item with a price." });
+  } else if (data.amountType === "fixed") {
+    if (!(parseFloat(data.fixedAmount || "0") > 0)) {
+      errors.push({ step: STEP_DETAILS, message: "Set a fixed amount greater than zero." });
+    }
+  } else if (data.amountType === "customer") {
+    const minN = parseFloat(data.minAmount), maxN = parseFloat(data.maxAmount);
+    if (!isNaN(minN) && !isNaN(maxN) && maxN < minN) {
+      errors.push({ step: STEP_DETAILS, message: "Maximum amount can't be less than the minimum." });
+    }
+  } else if (data.amountType === "multiple") {
+    const hasItem = data.items.some(it => it.label.trim() && parseFloat(it.amount || "0") > 0);
+    if (!hasItem) errors.push({ step: STEP_DETAILS, message: `Add at least one ${data.itemsAreTickets ? "ticket tier" : "item"} with a price.` });
+    if (data.itemsAreTickets && !data.eventDate) {
+      errors.push({ step: STEP_DETAILS, message: "Set the event date." });
+    }
+  }
+
+  // ── Step 2: Customer fields ──
+  const labelCounts = data.customerFields.reduce<Record<string, number>>((acc, f) => {
+    const k = f.label.trim().toLowerCase();
+    if (k) acc[k] = (acc[k] ?? 0) + 1;
+    return acc;
+  }, {});
+  if (data.customerFields.some(f => !f.label.trim())) {
+    errors.push({ step: STEP_FIELDS, message: "Every customer field needs a label." });
+  }
+  if (Object.values(labelCounts).some(n => n > 1)) {
+    errors.push({ step: STEP_FIELDS, message: "Two customer fields share the same label." });
+  }
+
+  // ── Step 4: Settings ──
+  if (data.redirectUrl && !isValidUrlStr(data.redirectUrl)) {
+    errors.push({ step: STEP_SETTINGS, message: "The redirect URL isn't valid (include https://)." });
+  }
+  if (data.webhookUrl && !isValidUrlStr(data.webhookUrl)) {
+    errors.push({ step: STEP_SETTINGS, message: "The webhook URL isn't valid (include https://)." });
+  }
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (data.expiryDate && data.expiryDate < todayStr) {
+    errors.push({ step: STEP_SETTINGS, message: "The expiry date is in the past." });
+  }
+  if (data.maxPayments && (isNaN(parseInt(data.maxPayments)) || parseInt(data.maxPayments) < 1)) {
+    errors.push({ step: STEP_SETTINGS, message: "Max payments must be 1 or more (or blank for unlimited)." });
+  }
+
+  return errors;
 }
