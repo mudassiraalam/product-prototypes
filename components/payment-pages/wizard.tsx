@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Btn } from "./primitives";
 import { PagePreview } from "./page-preview";
@@ -355,14 +355,34 @@ function SuccessScreen({ data, onDone }: { data: WizardData; onDone: () => void 
 // ──────────────────────────────────────────────────────────────────────────────
 // Main wizard
 // ──────────────────────────────────────────────────────────────────────────────
-export function Wizard({ onBack }: { onBack: () => void }) {
-  const [phase, setPhase] = useState<"type-select" | "wizard" | "success">("type-select");
-  const [selectedType, setSelectedType] = useState<PageType | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [data, setData] = useState<WizardData>(DEFAULT_WIZARD);
+export function Wizard({
+  initialData, initialStep = 0, editing = false,
+  onBack, onSaveDraft, onPublish, onSyncState,
+}: {
+  initialData?: WizardData;
+  initialStep?: number;
+  editing?: boolean;                               // reopening an existing page/draft → skip type-select
+  onBack: () => void;                              // app's "leave the builder" handler (shows leave prompt if dirty)
+  onSaveDraft?: (data: WizardData, step: number) => void;
+  onPublish?: (data: WizardData) => void;
+  onSyncState?: (data: WizardData, step: number, building: boolean) => void;
+}) {
+  const seed = initialData ?? DEFAULT_WIZARD;
+  const [phase, setPhase] = useState<"type-select" | "wizard" | "success">(editing ? "wizard" : "type-select");
+  const [selectedType, setSelectedType] = useState<PageType | null>(editing ? seed.pageType : null);
+  const [currentStep, setCurrentStep] = useState(editing ? initialStep : 0);
+  const [data, setData] = useState<WizardData>(seed);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   // Publish-time validation errors, keyed by step index. Empty until a blocked publish.
   const [publishErrors, setPublishErrors] = useState<ValidationError[]>([]);
+
+  // Mirror live builder state up to the app so the global home button can offer
+  // "save as draft" when the merchant tries to leave with unsaved changes.
+  useEffect(() => {
+    onSyncState?.(data, currentStep, phase === "wizard");
+    // onSyncState intentionally excluded from deps to avoid identity-churn loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, currentStep, phase]);
 
   const beginType = (key: PageType) => {
     setSelectedType(key);
@@ -372,7 +392,9 @@ export function Wizard({ onBack }: { onBack: () => void }) {
     setPhase("wizard");
   };
 
-  // Have any edits been made to the current page vs. a fresh page of this type?
+  // Have any edits been made vs. a fresh page of this type? (Used only for the
+  // new-creation "back to type picker" confirm; leaving the builder entirely is
+  // handled by the app-level prompt.)
   const isDirty = () =>
     selectedType !== null &&
     JSON.stringify(data) !== JSON.stringify({ ...DEFAULT_WIZARD, pageType: selectedType });
@@ -382,6 +404,8 @@ export function Wizard({ onBack }: { onBack: () => void }) {
   const steps = selectedType ? getStepsForType(selectedType) : [];
   const totalSteps = steps.length;
 
+  const canSaveDraft = !!onSaveDraft && data.title.trim().length > 0;
+
   const goNext = () => {
     if (currentStep < totalSteps - 1) {
       setCurrentStep(s => s + 1);
@@ -390,18 +414,21 @@ export function Wizard({ onBack }: { onBack: () => void }) {
       const errors = validateWizard(data);
       if (errors.length > 0) {
         setPublishErrors(errors);
-        // Jump to the first step that has a problem so the fix is visible.
         setCurrentStep(errors[0].step);
         return;
       }
       setPublishErrors([]);
+      onPublish?.(data);     // app upserts the page as Active
       setPhase("success");
     }
   };
 
   const goBack = () => {
     if (currentStep > 0) { setCurrentStep(s => s - 1); return; }
-    // Step 1 → back to type selection. Warn before discarding any work.
+    // On step 1. When editing there's no type picker to return to → leave the
+    // builder (the app decides whether to prompt). For new creation, drop back
+    // to the type picker, confirming first if work would be lost.
+    if (editing) { onBack(); return; }
     if (isDirty() && !window.confirm("Going back will discard the changes you've made to this page. Continue?")) return;
     setData(DEFAULT_WIZARD);
     setSelectedType(null);
@@ -481,11 +508,26 @@ export function Wizard({ onBack }: { onBack: () => void }) {
             )}
             {stepComponents[currentStep]}
           </div>
-          <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 10 }}>
             <Btn onClick={goBack} variant="ghost" size="sm">
-              ← {currentStep === 0 ? "Type" : "Back"}
+              ← {currentStep === 0 ? (editing ? "Exit" : "Type") : "Back"}
             </Btn>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {onSaveDraft && (
+                <button
+                  onClick={() => canSaveDraft && onSaveDraft(data, currentStep)}
+                  disabled={!canSaveDraft}
+                  title={canSaveDraft ? "Save and finish later" : "Add a page title to save a draft"}
+                  style={{
+                    background: C.white, color: canSaveDraft ? C.textSecondary : C.textFaint,
+                    border: `1px solid ${C.border}`, borderRadius: radius.md, padding: "7px 14px",
+                    fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                    cursor: canSaveDraft ? "pointer" : "not-allowed", opacity: canSaveDraft ? 1 : 0.6,
+                  }}
+                >
+                  Save as Draft
+                </button>
+              )}
               <span style={{ fontSize: 11, color: C.textFaint }}>Step {currentStep + 1} of {totalSteps}</span>
               <Btn onClick={goNext} size="sm">
                 {currentStep === totalSteps - 1 ? "Publish Page" : "Continue →"}
