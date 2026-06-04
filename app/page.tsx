@@ -12,9 +12,18 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [selectedPage, setSelectedPage] = useState<PaymentPage | null>(null);
 
+  const goHome = () => {
+    // Leaving the builder mid-flow would drop unsaved work — confirm first.
+    if (screen === "wizard") {
+      if (!window.confirm("Leave page creation? Any unsaved changes will be lost.")) return;
+    }
+    setSelectedPage(null);
+    setScreen("dashboard");
+  };
+
   return (
     <div style={{ height: "100vh", background: "#f4f6fb", fontFamily: "var(--font-inter, 'Inter', 'Segoe UI', sans-serif)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <TopNav breadcrumb={
+      <TopNav onHome={goHome} breadcrumb={
         screen === "dashboard" ? [{ label: "Home", icon: "⌂" }, { label: "Payment Pages" }]
         : screen === "wizard" ? [{ label: "Home", icon: "⌂" }, { label: "Payment Pages" }, { label: "Create" }]
         : screen === "detail" ? [{ label: "Home", icon: "⌂" }, { label: "Payment Pages" }, { label: selectedPage?.title ?? "Page" }]
