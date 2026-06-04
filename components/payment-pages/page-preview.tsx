@@ -146,10 +146,6 @@ function DesktopPreview(p: PreviewProps) {
                 <div style={{ width: 56, height: 56, borderRadius: radius.sm, background: `url(${data.productImage}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
               )}
               <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
-                  {data.pageType === "invoice" ? "Invoice" : (data.amountType === "customer" && data.isDonation) ? "Your Cause" : (data.amountType === "multiple" && data.itemsAreTickets) ? "Event" : "Order Summary"}
-                </p>
-                <div style={{ width: 30, height: 3, background: data.brandColor, marginBottom: 8 }} />
                 <p style={{ fontSize: 19, fontWeight: 700, color: text, margin: 0, lineHeight: 1.3, overflowWrap: "break-word", wordBreak: "break-word" }}>
                   {data.title || (
                     data.pageType === "invoice" ? "Invoice"
@@ -158,11 +154,12 @@ function DesktopPreview(p: PreviewProps) {
                       : "Your Page Title"
                   )}
                 </p>
+                <div style={{ width: 30, height: 3, background: data.brandColor, margin: "10px 0 0" }} />
                 {data.pageType === "page" && data.amountType === "customer" && data.isDonation && (
-                  <p style={{ fontSize: 11, color: textMuted, margin: "4px 0 0" }}>Every contribution counts</p>
+                  <p style={{ fontSize: 11, color: textMuted, margin: "10px 0 0" }}>Every contribution counts</p>
                 )}
                 {data.description && (
-                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, margin: "8px 0 0", whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>{data.description}</p>
+                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, margin: "12px 0 0", whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>{data.description}</p>
                 )}
               </div>
             </div>
