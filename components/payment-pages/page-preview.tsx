@@ -686,6 +686,7 @@ function BillingPanel({
         </div>
         <MethodInput
           method={activeMethod} brand={data.brandColor}
+          banks={data.netbankingBanks} wallets={data.wallets}
           text={text} textMuted={textMuted} textFaint={textFaint}
           fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact}
         />
@@ -802,9 +803,10 @@ function BuyerField({
 // Method-specific input shown under the PAY VIA selector
 // ──────────────────────────────────────────────────────────────────────────────
 function MethodInput({
-  method, brand, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
+  method, brand, banks, wallets, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
 }: {
-  method: PaymentMethod; brand: string; text: string; textMuted: string; textFaint: string;
+  method: PaymentMethod; brand: string; banks?: string[]; wallets?: string[];
+  text: string; textMuted: string; textFaint: string;
   fieldSurface: string; fieldBorder: string; subtleBg: string; compact?: boolean;
 }) {
   const pad = compact ? "10px 12px" : "12px 13px";
@@ -833,21 +835,19 @@ function MethodInput({
     );
   }
   if (method === "netbanking") {
+    const bankList = banks && banks.length ? banks : ["HDFC Bank", "ICICI Bank", "State Bank of India", "Axis Bank", "Kotak Mahindra Bank"];
     return (
       <select defaultValue="" style={{ ...base, color: textMuted, appearance: "none" }}>
         <option value="" disabled>Select your bank…</option>
-        <option>HDFC Bank</option>
-        <option>ICICI Bank</option>
-        <option>State Bank of India</option>
-        <option>Axis Bank</option>
-        <option>Kotak Mahindra Bank</option>
+        {bankList.map(b => <option key={b}>{b}</option>)}
       </select>
     );
   }
   // wallets
+  const walletList = wallets && wallets.length ? wallets : ["Paytm", "PhonePe", "Amazon Pay", "Mobikwik"];
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {["Paytm", "PhonePe", "Amazon Pay", "Mobikwik"].map(w => (
+      {walletList.map(w => (
         <span key={w} style={{ padding: compact ? "8px 12px" : "10px 14px", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, fontSize: 12.5, fontWeight: 600, color: text, background: fieldSurface, cursor: "default" }}>{w}</span>
       ))}
     </div>
