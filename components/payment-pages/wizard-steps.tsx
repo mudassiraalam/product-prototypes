@@ -102,6 +102,9 @@ export interface WizardData {
   // Payment methods offered on the page (merchant-configurable; company-level
   // gating over which merchants may enable which methods is a separate backend concern)
   paymentMethods: PaymentMethod[];
+  // Which specific netbanking banks / wallet partners the merchant exposes to customers.
+  netbankingBanks: string[];
+  wallets: string[];
 
   // Settings - Publish
   expiryDate: string;
@@ -123,6 +126,18 @@ export const ALL_PAYMENT_METHODS: { key: PaymentMethod; label: string }[] = [
   { key: "cards", label: "Cards" },
   { key: "netbanking", label: "Net Banking" },
   { key: "wallets", label: "Wallets" },
+];
+
+// Master catalogues the merchant picks from. Customers only ever see the subset
+// the merchant has enabled (stored in data.netbankingBanks / data.wallets).
+export const NETBANKING_BANKS = [
+  "HDFC Bank", "ICICI Bank", "State Bank of India", "Axis Bank", "Kotak Mahindra Bank",
+  "Punjab National Bank", "Bank of Baroda", "Yes Bank", "IndusInd Bank", "IDFC First Bank",
+  "Canara Bank", "Union Bank of India",
+];
+
+export const WALLET_PARTNERS = [
+  "Paytm", "PhonePe", "Amazon Pay", "Mobikwik", "Freecharge", "Airtel Money", "JioMoney", "Ola Money",
 ];
 
 export const DEFAULT_WIZARD: WizardData = {
@@ -191,6 +206,8 @@ export const DEFAULT_WIZARD: WizardData = {
   socialLinkedin: "",
 
   paymentMethods: ["upi", "cards", "netbanking", "wallets"],
+  netbankingBanks: ["HDFC Bank", "ICICI Bank", "State Bank of India", "Axis Bank", "Kotak Mahindra Bank"],
+  wallets: ["Paytm", "PhonePe", "Amazon Pay", "Mobikwik"],
 
   expiryDate: "",
   maxPayments: "",
@@ -224,7 +241,45 @@ function syncPanField(fields: CFields, wantPan: boolean): CFields {
   return fields;
 }
 
-// ── Crop Modal (whole image visible + dimmed mask + bright keep-frame) ──────────
+// Chip multi-select for choosing which bank / wallet providers appear to customers.
+// Keeps at least one selected, and preserves the master-list order in the output.
+function PartnerPicker({ title, options, selected, onChange }: {
+  title: string; options: string[]; selected: string[]; onChange: (list: string[]) => void;
+}) {
+  const toggle = (opt: string) => {
+    const on = selected.includes(opt);
+    if (on && selected.length === 1) return; // keep at least one provider
+    const next = on ? selected.filter(x => x !== opt) : [...selected, opt];
+    onChange(options.filter(o => next.includes(o)));
+  };
+  return (
+    <div style={{ margin: "0 0 16px", paddingLeft: 4 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px" }}>
+        {title} <span style={{ color: C.textMuted, fontWeight: 600 }}>({selected.length} of {options.length})</span>
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {options.map(opt => {
+          const on = selected.includes(opt);
+          return (
+            <button key={opt} type="button" onClick={() => toggle(opt)} style={{
+              display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px",
+              borderRadius: 999, border: `1.5px solid ${on ? C.blue : C.border}`,
+              background: on ? C.blueLight : C.white, color: on ? C.blueDark : C.textMuted,
+              fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.12s",
+            }}>
+              <span style={{
+                width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                border: `1.5px solid ${on ? C.blue : C.border}`, background: on ? C.blue : "transparent",
+                color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800,
+              }}>{on ? "✓" : ""}</span>
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 function CropModal({
   src, ratio, onCancel, onSave,
 }: {
@@ -1166,27 +1221,44 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
 
       <SectionCard title="Payment Methods">
         <p style={{ fontSize: 12, color: C.textMuted, margin: "0 0 12px", lineHeight: 1.5 }}>
-          Choose which methods customers can pay with. At least one must stay enabled.
+          Choose which methods customers can pay with, and which providers appear within each. At least one method must stay enabled.
         </p>
         {ALL_PAYMENT_METHODS.map(m => {
           const enabled = data.paymentMethods.includes(m.key);
           const isLastOn = enabled && data.paymentMethods.length === 1;
           return (
-            <Toggle
-              key={m.key}
-              checked={enabled}
-              onChange={v => {
-                if (!v && isLastOn) return; // never allow zero methods
-                const next = v
-                  ? [...data.paymentMethods, m.key]
-                  : data.paymentMethods.filter(k => k !== m.key);
-                // Preserve canonical order so the page renders them consistently.
-                const ordered = ALL_PAYMENT_METHODS.map(x => x.key).filter(k => next.includes(k));
-                setData({ ...data, paymentMethods: ordered });
-              }}
-              label={m.label}
-              desc={isLastOn ? "Can't disable — at least one method is required" : undefined}
-            />
+            <div key={m.key}>
+              <Toggle
+                checked={enabled}
+                onChange={v => {
+                  if (!v && isLastOn) return; // never allow zero methods
+                  const next = v
+                    ? [...data.paymentMethods, m.key]
+                    : data.paymentMethods.filter(k => k !== m.key);
+                  // Preserve canonical order so the page renders them consistently.
+                  const ordered = ALL_PAYMENT_METHODS.map(x => x.key).filter(k => next.includes(k));
+                  setData({ ...data, paymentMethods: ordered });
+                }}
+                label={m.label}
+                desc={isLastOn ? "Can't disable — at least one method is required" : undefined}
+              />
+              {enabled && m.key === "netbanking" && (
+                <PartnerPicker
+                  title="Banks shown to customers"
+                  options={NETBANKING_BANKS}
+                  selected={data.netbankingBanks}
+                  onChange={list => setData({ ...data, netbankingBanks: list })}
+                />
+              )}
+              {enabled && m.key === "wallets" && (
+                <PartnerPicker
+                  title="Wallets shown to customers"
+                  options={WALLET_PARTNERS}
+                  selected={data.wallets}
+                  onChange={list => setData({ ...data, wallets: list })}
+                />
+              )}
+            </div>
           );
         })}
       </SectionCard>
