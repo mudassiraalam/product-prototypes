@@ -1,8 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import { C, radius, shadow } from "./tokens";
-import type { WizardData } from "./wizard-steps";
-import { getSymbol } from "./wizard-steps";
+import type { WizardData, PaymentMethod } from "./wizard-steps";
+import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
 
 const FONT_MAP = {
   default: "var(--font-inter), 'Inter', system-ui, sans-serif",
@@ -107,34 +107,66 @@ function DesktopPreview(p: PreviewProps) {
           }} />
         )}
 
-        {/* ── Clean header: logo + merchant name (no "Paying to") ────── */}
+        {/* ── Clean header: logo + merchant name · Secured by EnKash ────── */}
         <div style={{
           background: headerBg,
           borderRadius: data.coverImage ? 0 : `${radius.lg}px ${radius.lg}px 0 0`,
           borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
           borderTop: data.coverImage ? "none" : `1px solid ${border}`,
-          padding: "18px 28px 14px", display: "flex", alignItems: "center", gap: 12,
+          padding: "18px 28px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         }}>
-          {data.showLogo && (
-            <div style={{ width: 38, height: 38, background: (data as any).logoImage ? "#ffffff" : data.brandColor, color: onBrand, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15, fontWeight: 800, overflow: "hidden", border: (data as any).logoImage ? `1px solid ${border}` : "none" }}>
-              {(data as any).logoImage
-                ? <img src={(data as any).logoImage} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="logo" />
-                : (data.merchantName || "E").slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: text }}>{data.merchantName || "Your Brand"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            {data.showLogo && (
+              <div style={{ width: 38, height: 38, background: (data as any).logoImage ? "#ffffff" : data.brandColor, color: onBrand, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15, fontWeight: 800, overflow: "hidden", border: (data as any).logoImage ? `1px solid ${border}` : "none" }}>
+                {(data as any).logoImage
+                  ? <img src={(data as any).logoImage} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="logo" />
+                  : (data.merchantName || "E").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <span style={{ fontSize: 16, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "Your Brand"}</span>
+          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
+            <span style={{ fontSize: 11 }}>🔒</span>
+            Secured by
+            <span style={{ fontWeight: 700, color: C.blue }}>EnKash</span>
+          </span>
         </div>
-
-        {/* ── Product / Cause / Event / Invoice header (no floating total) ── */}
-        <HeaderBlock data={data} cardBg={headerBg} subtleBg={subtleBg} text={text} textMuted={textMuted} textFaint={textFaint} border={border} total={total} brandColor={data.brandColor} />
 
         {/* ── Two column body ──────────────────────────────────────── */}
         <div style={{
           background: cardBg, borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
+          borderTop: `1px solid ${border}`,
           display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0,
         }}>
-          {/* LEFT: full description, contact, social, gallery */}
+          {/* LEFT: offer heading, full description, contact, social, gallery */}
           <div style={{ padding: "24px 28px", minWidth: 0 }}>
+            {/* ── Offer heading (title lives here, reference-style) ── */}
+            <div style={{ marginBottom: 22, display: "flex", gap: 14, alignItems: "flex-start" }}>
+              {data.productImage && data.pageType === "page" && data.amountType === "fixed" && (
+                <div style={{ width: 56, height: 56, borderRadius: radius.sm, background: `url(${data.productImage}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
+              )}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
+                  {data.pageType === "invoice" ? "Invoice" : (data.amountType === "customer" && data.isDonation) ? "Your Cause" : (data.amountType === "multiple" && data.itemsAreTickets) ? "Event" : "Order Summary"}
+                </p>
+                <div style={{ width: 30, height: 3, background: data.brandColor, marginBottom: 8 }} />
+                <p style={{ fontSize: 19, fontWeight: 700, color: text, margin: 0, lineHeight: 1.3, overflowWrap: "break-word", wordBreak: "break-word" }}>
+                  {data.title || (
+                    data.pageType === "invoice" ? "Invoice"
+                      : (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
+                      : (data.amountType === "multiple" && data.itemsAreTickets) ? "Your Event Name"
+                      : "Your Page Title"
+                  )}
+                </p>
+                {data.pageType === "page" && data.amountType === "customer" && data.isDonation && (
+                  <p style={{ fontSize: 11, color: textMuted, margin: "4px 0 0" }}>Every contribution counts</p>
+                )}
+                {data.description && (
+                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, margin: "8px 0 0", whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>{data.description}</p>
+                )}
+              </div>
+            </div>
+
             {data.longDescription && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>About</p>
@@ -222,11 +254,11 @@ function DesktopPreview(p: PreviewProps) {
           <div style={{ background: border }} />
 
           {/* RIGHT: billing form — sticky so it stays in view as left content scrolls */}
-          <div style={{ background: panelBg, minWidth: 0 }}>
+          <div style={{ background: p.dark ? panelBg : cardBg, minWidth: 0 }}>
             <div style={{ position: "sticky", top: 16, padding: "24px 28px" }}>
               <BillingPanel
                 data={data} text={text} textMuted={textMuted} textFaint={textFaint}
-                border={border} subtleBg={cardBg} onBrand={onBrand} btnRadius={btnRadius}
+                border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
                 total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
               />
             </div>
@@ -430,11 +462,17 @@ function BillingPanel({
   const symbol = getSymbol(data.currency);
   const fieldSurface = dark ? "rgba(255,255,255,0.05)" : "#ffffff";
   const fieldBorder = dark ? "rgba(255,255,255,0.14)" : "#d6dbe5";
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: compact ? "9px 11px" : "10px 13px", border: `1px solid ${fieldBorder}`,
-    borderRadius: radius.sm, fontSize: 13, color: textMuted, background: fieldSurface,
-    boxSizing: "border-box", fontFamily: "inherit",
-  };
+
+  // Subtle raised surface for the Total box — faint brand-neutral tint → white.
+  const summaryGradient = dark
+    ? "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))"
+    : "linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%)";
+
+  // Enabled payment methods (merchant-configurable); fall back to all four.
+  const methods = (data.paymentMethods && data.paymentMethods.length ? data.paymentMethods : ALL_PAYMENT_METHODS.map(m => m.key));
+  const [payMethod, setPayMethod] = useState<PaymentMethod>(methods[0]);
+  // Keep selection valid if the merchant toggles the active method off in the wizard.
+  const activeMethod = methods.includes(payMethod) ? payMethod : methods[0];
 
   // Computed states — defensive against any data combo where flags don't match amountType.
   const isInvoice = data.pageType === "invoice";
@@ -459,15 +497,15 @@ function BillingPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* ── Order summary card (mode-relative elevation surface) ── */}
+      {/* ── Total card (gradient elevation surface) ── */}
       <div style={{ marginBottom: 4 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Order summary</p>
-        <div style={{ background: subtleBg, border: `1px solid ${border}`, borderRadius: radius.md, padding: "12px 14px" }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Total</p>
+        <div style={{ background: summaryGradient, border: `1px solid ${border}`, borderRadius: radius.md, padding: "14px 16px", boxShadow: dark ? "none" : "0 1px 2px rgba(16,24,40,0.04)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
             <span style={{ fontSize: 12, color: textMuted }}>
               {isInvoice ? "Total due" : isDonationFlow ? "Your donation" : "Total payable"}
             </span>
-            <span style={{ fontSize: 20, fontWeight: 800, color: text }}>{total}</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: text }}>{total}</span>
           </div>
           {isInvoice && parseFloat(data.taxPercent || "0") > 0 && (
             <p style={{ fontSize: 11, color: textFaint, margin: "4px 0 0" }}>Incl. {data.taxPercent}% tax</p>
@@ -475,9 +513,12 @@ function BillingPanel({
         </div>
       </div>
 
-      <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
-        {amountLabel}
-      </p>
+      {/* Amount selector label — skipped for fixed (the Total card already states it) */}
+      {!isFixed && (
+        <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+          {amountLabel}
+        </p>
+      )}
 
       {/* CUSTOMER DECIDES (donation OR not) — suggested chips + custom input */}
       {isCustomerDecides && (
@@ -598,49 +639,220 @@ function BillingPanel({
         </div>
       )}
 
-      {/* FIXED AMOUNT */}
-      {isFixed && (
-        <div style={{ ...inputStyle, color: text, fontWeight: 700, fontSize: 15 }}>
-          {symbol}{data.fixedAmount || "0.00"}
-        </div>
-      )}
+      {/* FIXED AMOUNT — no separate box; the Total card above already shows it */}
 
-      {/* Customer fields */}
+      {/* Buyer details — real, type-aware inputs */}
       {data.customerFields.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-          {data.customerFields.slice(0, compact ? 3 : 5).map((f, i) => (
-            <div key={i} style={inputStyle}>
-              {f.label}{!f.optional && <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>}
-            </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+          {data.customerFields.slice(0, compact ? 4 : 7).map((f, i) => (
+            <BuyerField
+              key={i} field={f} symbol={symbol}
+              text={text} textMuted={textMuted} textFaint={textFaint}
+              fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact}
+            />
           ))}
-          {data.customerFields.length > (compact ? 3 : 5) && (
-            <p style={{ fontSize: 11, color: textFaint, margin: 0 }}>+{data.customerFields.length - (compact ? 3 : 5)} more fields</p>
+          {data.customerFields.length > (compact ? 4 : 7) && (
+            <p style={{ fontSize: 11, color: textFaint, margin: 0 }}>+{data.customerFields.length - (compact ? 4 : 7)} more fields</p>
           )}
         </div>
       )}
 
       {isDonationFlow && data.is80G && (
-        <div style={{ background: hexAlpha("#16a34a", 0.08), border: `1px solid ${hexAlpha("#16a34a", 0.25)}`, borderRadius: radius.sm, padding: "8px 10px", fontSize: 11, color: "#15803d", display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ background: hexAlpha("#16a34a", 0.08), border: `1px solid ${hexAlpha("#16a34a", 0.25)}`, borderRadius: radius.sm, padding: "8px 10px", fontSize: 11, color: dark ? "#4ade80" : "#15803d", display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
           <span style={{ fontSize: 12 }}>✓</span>
           <span>80G receipt available · Tax exemption eligible</span>
         </div>
       )}
 
+      {/* ── PAY VIA — method selector + method-specific input ── */}
+      <div style={{ marginTop: 8 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Pay via</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {ALL_PAYMENT_METHODS.filter(m => methods.includes(m.key)).map(m => {
+            const selected = activeMethod === m.key;
+            return (
+              <button key={m.key} onClick={() => setPayMethod(m.key)} style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: compact ? "7px 11px" : "8px 14px",
+                border: `1.5px solid ${selected ? data.brandColor : fieldBorder}`,
+                background: selected ? hexAlpha(data.brandColor, 0.08) : fieldSurface,
+                color: selected ? data.brandColor : text, borderRadius: 999,
+                fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+              }}>
+                {selected && (
+                  <span style={{ width: 14, height: 14, borderRadius: "50%", background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800 }}>✓</span>
+                )}
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <MethodInput
+          method={activeMethod} brand={data.brandColor}
+          text={text} textMuted={textMuted} textFaint={textFaint}
+          fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact}
+        />
+      </div>
+
       {/* Pay button */}
       <button style={{
-        width: "100%", padding: compact ? "11px" : "13px", background: data.brandColor, color: onBrand,
+        width: "100%", padding: compact ? "12px" : "14px", background: data.brandColor, color: onBrand,
         border: "none", borderRadius: btnRadius, fontSize: compact ? 14 : 15, fontWeight: 700,
         cursor: "default", fontFamily: "inherit", letterSpacing: "0.01em",
         boxShadow: `0 6px 18px ${hexAlpha(data.brandColor, 0.32)}`,
-        marginTop: 6,
+        marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
+        <span style={{ fontSize: 13 }}>🔒</span>
         {data.buttonLabel || "Pay Securely"} {total}
+        <span style={{ fontSize: 14 }}>›</span>
       </button>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10 }}>🔒</span>
-        <span style={{ fontSize: 10, color: textFaint, fontWeight: 600, letterSpacing: "0.02em" }}>UPI · Visa · Mastercard · PCI compliant</span>
+      {/* Trust badges */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
+        {["256-bit SSL", "PCI DSS", "RBI Compliant"].map(b => (
+          <span key={b} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: textFaint, fontWeight: 600, letterSpacing: "0.01em" }}>
+            <span style={{ color: "#16a34a", fontSize: 11 }}>✓</span>{b}
+          </span>
+        ))}
       </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Buyer field — renders a real, type-aware input with a label above it
+// ──────────────────────────────────────────────────────────────────────────────
+function BuyerField({
+  field, symbol, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
+}: {
+  field: { type: string; label: string; optional: boolean };
+  symbol: string; text: string; textMuted: string; textFaint: string;
+  fieldSurface: string; fieldBorder: string; subtleBg: string; compact?: boolean;
+}) {
+  const pad = compact ? "10px 12px" : "12px 13px";
+  const base: React.CSSProperties = {
+    width: "100%", padding: pad, border: `1px solid ${fieldBorder}`, borderRadius: radius.sm,
+    fontSize: 13, color: text, background: fieldSurface, boxSizing: "border-box",
+    fontFamily: "inherit", outline: "none",
+  };
+  const placeholderColor = textFaint;
+
+  const label = (
+    <label style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 6 }}>
+      {field.label}{!field.optional && <span style={{ color: "#ef4444", marginLeft: 3 }}>*</span>}
+    </label>
+  );
+
+  let control: React.ReactNode;
+  switch (field.type) {
+    case "phone":
+      control = (
+        <div style={{ display: "flex", alignItems: "stretch", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, overflow: "hidden", background: fieldSurface }}>
+          <span style={{ padding: pad, background: subtleBg, fontSize: 13, color: textMuted, fontWeight: 600, borderRight: `1px solid ${fieldBorder}`, whiteSpace: "nowrap" }}>+91</span>
+          <input inputMode="tel" placeholder="98765 43210" style={{ ...base, border: "none", borderRadius: 0, flex: 1, minWidth: 0 }} />
+        </div>
+      );
+      break;
+    case "email":
+      control = <input type="email" placeholder="you@example.com" style={base} />;
+      break;
+    case "address":
+    case "textarea":
+      control = <textarea rows={2} placeholder={field.type === "address" ? "Flat, street, city, PIN" : "Type here…"} style={{ ...base, resize: "none" }} />;
+      break;
+    case "dropdown":
+      control = (
+        <select defaultValue="" style={{ ...base, color: textMuted, appearance: "none", backgroundImage: "none" }}>
+          <option value="" disabled>Select an option…</option>
+          <option>Option 1</option>
+          <option>Option 2</option>
+        </select>
+      );
+      break;
+    case "date":
+      control = <input type="date" style={{ ...base, color: textMuted }} />;
+      break;
+    case "number":
+      control = <input type="number" placeholder="0" style={base} />;
+      break;
+    case "pan":
+      control = <input maxLength={10} placeholder="ABCDE1234F" style={{ ...base, textTransform: "uppercase", letterSpacing: "0.05em" }} />;
+      break;
+    case "gstin":
+      control = <input maxLength={15} placeholder="22AAAAA0000A1Z5" style={{ ...base, textTransform: "uppercase", letterSpacing: "0.03em" }} />;
+      break;
+    case "name":
+      control = <input placeholder="Your full name" style={base} />;
+      break;
+    case "company":
+      control = <input placeholder="Company name" style={base} />;
+      break;
+    default:
+      control = <input placeholder={field.label} style={base} />;
+  }
+
+  // Hint browsers/CSS to render placeholder color consistently is non-trivial inline;
+  // the muted base color above keeps typed text readable while placeholders stay faint via the browser default.
+  return (
+    <div>
+      {label}
+      {control}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Method-specific input shown under the PAY VIA selector
+// ──────────────────────────────────────────────────────────────────────────────
+function MethodInput({
+  method, brand, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
+}: {
+  method: PaymentMethod; brand: string; text: string; textMuted: string; textFaint: string;
+  fieldSurface: string; fieldBorder: string; subtleBg: string; compact?: boolean;
+}) {
+  const pad = compact ? "10px 12px" : "12px 13px";
+  const base: React.CSSProperties = {
+    width: "100%", padding: pad, border: `1px solid ${fieldBorder}`, borderRadius: radius.sm,
+    fontSize: 13, color: text, background: fieldSurface, boxSizing: "border-box", fontFamily: "inherit", outline: "none",
+  };
+
+  if (method === "upi") {
+    return (
+      <div style={{ display: "flex", alignItems: "stretch", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, overflow: "hidden", background: fieldSurface }}>
+        <input placeholder="yourname@upi" style={{ ...base, border: "none", borderRadius: 0, flex: 1, minWidth: 0 }} />
+        <span style={{ padding: pad, fontSize: 12, fontWeight: 800, color: brand, borderLeft: `1px solid ${fieldBorder}`, display: "flex", alignItems: "center" }}>UPI</span>
+      </div>
+    );
+  }
+  if (method === "cards") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <input placeholder="Card number" inputMode="numeric" style={base} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <input placeholder="MM / YY" inputMode="numeric" style={base} />
+          <input placeholder="CVV" inputMode="numeric" maxLength={4} style={base} />
+        </div>
+      </div>
+    );
+  }
+  if (method === "netbanking") {
+    return (
+      <select defaultValue="" style={{ ...base, color: textMuted, appearance: "none" }}>
+        <option value="" disabled>Select your bank…</option>
+        <option>HDFC Bank</option>
+        <option>ICICI Bank</option>
+        <option>State Bank of India</option>
+        <option>Axis Bank</option>
+        <option>Kotak Mahindra Bank</option>
+      </select>
+    );
+  }
+  // wallets
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {["Paytm", "PhonePe", "Amazon Pay", "Mobikwik"].map(w => (
+        <span key={w} style={{ padding: compact ? "8px 12px" : "10px 14px", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, fontSize: 12.5, fontWeight: 600, color: text, background: fieldSurface, cursor: "default" }}>{w}</span>
+      ))}
     </div>
   );
 }
