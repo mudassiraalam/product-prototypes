@@ -14,7 +14,12 @@ export default function Home() {
 
   return (
     <div style={{ height: "100vh", background: "#f4f6fb", fontFamily: "var(--font-inter, 'Inter', 'Segoe UI', sans-serif)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <TopNav />
+      <TopNav breadcrumb={
+        screen === "dashboard" ? [{ label: "Home", icon: "⌂" }, { label: "Payment Pages" }]
+        : screen === "wizard" ? [{ label: "Home", icon: "⌂" }, { label: "Payment Pages" }, { label: "Create" }]
+        : screen === "detail" ? [{ label: "Home", icon: "⌂" }, { label: "Payment Pages" }, { label: selectedPage?.title ?? "Page" }]
+        : undefined
+      } />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {screen !== "wizard" && <AppSidebar active="payment-pages" />}
         {screen === "dashboard" && (
