@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { C, radius, shadow } from "./tokens";
-import { StatusBadge, Btn } from "./primitives";
+import { StatusBadge, Btn, useClickOutside } from "./primitives";
 import { INITIAL_PAGES, PaymentPage, PageStatus, PageType, DASHBOARD_METRICS } from "./mock-data";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -28,102 +28,177 @@ function getKindInfo(page: PaymentPage): KindInfo {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Sparkline — builds a smooth-ish area + line from a 0..N series. Used by the
-// two "graph" stat cards (Total Revenue, Failed). viewBox is fixed; the path
-// is normalised to the series min/max so the shape fills the card height.
+// Sparkline — smooth (Catmull-Rom → bezier) area + line from a numeric series.
+// Used by the two "graph" stat cards (Total Revenue, Failed). The curve makes
+// the wiggle read naturally instead of as sharp zig-zags.
 // ──────────────────────────────────────────────────────────────────────────────
 function Sparkline({ data, stroke, fill }: { data: readonly number[]; stroke: string; fill: string }) {
-  const W = 220, H = 52, pad = 4;
+  const W = 240, H = 44, pad = 5;
   const min = Math.min(...data), max = Math.max(...data);
   const span = max - min || 1;
   const stepX = (W - pad * 2) / (data.length - 1);
-  const pts = data.map((v, i) => {
-    const x = pad + i * stepX;
-    const y = pad + (H - pad * 2) * (1 - (v - min) / span);
-    return [x, y];
-  });
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const pts = data.map((v, i) => [pad + i * stepX, pad + (H - pad * 2) * (1 - (v - min) / span)] as [number, number]);
+
+  // Smooth path via Catmull-Rom converted to cubic beziers.
+  let line = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    line += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
   const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 46, display: "block" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 40, display: "block" }}>
       <path d={area} fill={fill} />
       <path d={line} fill="none" stroke={stroke} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// Delta chip — small "▲ 18% vs last 7d avg" pill. `positive` controls colour,
-// and for "bad" metrics (Failed) the caller flips it so a falling number reads
-// green. The arrow direction follows the sign of the actual delta.
+// Delta chip — small "▲ 18% vs last 7d avg" pill. `positive` controls colour;
+// for "bad" metrics (Failed) the caller flips it so a falling number reads green.
 function DeltaChip({ deltaPct, positive }: { deltaPct: number; positive: boolean }) {
   const up = deltaPct >= 0;
   const c = positive ? C.green : C.red;
   const bg = positive ? C.greenBg : C.redBg;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: bg, color: c, fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: radius.sm }}>
         {up ? "▲" : "▼"} {Math.abs(deltaPct)}%
       </span>
-      <span style={{ fontSize: 11, color: C.textFaint }}>vs last 7d avg</span>
+      <span style={{ fontSize: 10.5, color: C.textFaint }}>vs last 7d avg</span>
     </div>
   );
 }
 
-// Unified stat card. Every card shares the same chrome: a coloured left accent
-// bar, an uppercase label with a help "?" affordance, and a large value. The
-// body below the value is one of two shapes:
+// Help "?" with a real hover tooltip explaining the metric.
+function HelpDot({ tip }: { tip: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      <span style={{ width: 14, height: 14, borderRadius: "50%", border: `1.2px solid ${C.textFaint}`, color: C.textFaint, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", lineHeight: 1 }}>?</span>
+      {show && (
+        <span style={{ position: "absolute", bottom: "calc(100% + 7px)", left: "50%", transform: "translateX(-50%)", width: 200, background: C.navy, color: C.white, fontSize: 11.5, fontWeight: 500, lineHeight: 1.5, padding: "8px 10px", borderRadius: radius.md, boxShadow: shadow.lg, zIndex: 60, textTransform: "none", letterSpacing: 0 }}>
+          {tip}
+          <span style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: `5px solid ${C.navy}` }} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+// Unified stat card. Shared chrome: a deep, fully-saturated left accent bar, an
+// uppercase label with a working help tooltip, and a large value. The body is:
 //   • variant="graph"     → sparkline + delta chip   (Total Revenue, Failed)
 //   • variant="breakdown" → list of label/value rows (Total Pages, Successful Payments)
-// All cards are the same fixed min-height so the 2-graph / 2-breakdown mix reads
-// as intentional rhythm rather than "two cards failed to load".
+// All cards share one compact min-height so the 2-graph / 2-breakdown mix reads
+// as intentional rhythm.
 type BreakdownRow = { label: string; value: string; dot?: string };
 function StatCard(props: {
   label: string;
   value: string;
   accent: string;
+  tip: string;
   variant: "graph" | "breakdown";
-  // graph:
   trend?: readonly number[];
   trendStroke?: string;
   trendFill?: string;
   deltaPct?: number;
   deltaPositive?: boolean;
-  // breakdown:
   rows?: BreakdownRow[];
 }) {
-  const { label, value, accent, variant } = props;
+  const { label, value, accent, variant, tip } = props;
   return (
     <div style={{
-      background: C.white, borderRadius: radius.lg, padding: "16px 18px",
-      border: `1.5px solid ${C.border}`, borderLeft: `3px solid ${accent}`,
-      minHeight: 172, display: "flex", flexDirection: "column",
+      background: C.white, borderRadius: radius.lg, overflow: "hidden",
+      border: `1px solid ${C.border}`, boxShadow: shadow.sm,
+      minHeight: 138, display: "flex",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</span>
-        <span style={{ width: 14, height: 14, borderRadius: "50%", border: `1.2px solid ${C.textFaint}`, color: C.textFaint, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", lineHeight: 1 }}>?</span>
-      </div>
-      <p style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 12px", lineHeight: 1 }}>{value}</p>
-
-      {variant === "graph" && (
-        <div style={{ marginTop: "auto" }}>
-          <Sparkline data={props.trend!} stroke={props.trendStroke!} fill={props.trendFill!} />
-          <div style={{ marginTop: 10 }}>
-            <DeltaChip deltaPct={props.deltaPct!} positive={props.deltaPositive!} />
-          </div>
+      {/* Deep, saturated left accent bar */}
+      <div style={{ width: 4, background: accent, flexShrink: 0 }} />
+      <div style={{ flex: 1, padding: "14px 16px", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
+          <span style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</span>
+          <HelpDot tip={tip} />
         </div>
-      )}
+        <p style={{ fontSize: 26, fontWeight: 800, color: C.text, margin: "0 0 8px", lineHeight: 1 }}>{value}</p>
 
-      {variant === "breakdown" && (
-        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 7 }}>
-          {props.rows!.map(r => (
-            <div key={r.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: C.textMuted }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                {r.dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: r.dot, flexShrink: 0 }} />}
-                {r.label}
-              </span>
-              <span style={{ color: C.text, fontWeight: 600 }}>{r.value}</span>
+        {variant === "graph" && (
+          <div style={{ marginTop: "auto" }}>
+            <Sparkline data={props.trend!} stroke={props.trendStroke!} fill={props.trendFill!} />
+            <div style={{ marginTop: 8 }}>
+              <DeltaChip deltaPct={props.deltaPct!} positive={props.deltaPositive!} />
             </div>
-          ))}
+          </div>
+        )}
+
+        {variant === "breakdown" && (
+          <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+            {props.rows!.map(r => (
+              <div key={r.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: C.textMuted }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  {r.dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: r.dot, flexShrink: 0 }} />}
+                  {r.label}
+                </span>
+                <span style={{ color: C.text, fontWeight: 600 }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Row action kebab — trimmed menu (Copy Link / Archive / Deactivate). Closes on
+// outside click via useClickOutside. View / Edit / View-Transactions were removed
+// because the "View" button beside it opens the same detail page.
+function RowKebab({ page, open, onToggle, onClose, onCopy, onArchive, onToggleStatus }: {
+  page: PaymentPage;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onCopy: () => void;
+  onArchive: () => void;
+  onToggleStatus: () => void;
+}) {
+  const ref = useClickOutside(onClose);
+  const itemStyle: React.CSSProperties = { padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, display: "flex", alignItems: "center", gap: 8 };
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={onToggle}
+        style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: open ? C.blueLight : C.bg, border: "none", borderRadius: radius.sm, cursor: "pointer", fontSize: 16, color: open ? C.blue : C.textMuted, fontFamily: "inherit" }}>
+        ⋮
+      </button>
+      {open && (
+        <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 176, padding: 6 }}>
+          <div onClick={() => { onCopy(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }}
+            onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+            📋 Copy Link
+          </div>
+          <div style={{ height: 1, background: C.border, margin: "4px 0" }} />
+          <div onClick={() => { onArchive(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }}
+            onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+            {page.status === "Archived" ? "↩ Unarchive" : "🗄 Archive"}
+          </div>
+          {page.status !== "Archived" && (
+            <div onClick={() => { onToggleStatus(); onClose(); }}
+              style={{ ...itemStyle, color: page.status === "Active" ? C.red : C.green }}
+              onMouseEnter={e => (e.currentTarget.style.background = page.status === "Active" ? C.redBg : C.greenBg)}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+              {page.status === "Active" ? "⛔ Deactivate" : "✅ Activate"}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -148,7 +223,16 @@ export function Dashboard({ onCreate, onView }: {
   const [statusTab, setStatusTab] = useState<"All" | PageStatus>("All");
   const [typeFilter, setTypeFilter] = useState("All");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+
+  // Copies the page's hosted URL and shows a brief "Copied!" confirmation.
+  const copyLink = (page: PaymentPage) => {
+    const url = `pay.enkash.in/${page.slug}`;
+    navigator.clipboard?.writeText(url).catch(() => {});
+    setCopiedId(page.id);
+    setTimeout(() => setCopiedId(c => (c === page.id ? null : c)), 1500);
+  };
   // Sort state for click-to-sort columns (Created / Views / Payments / Revenue).
   const [sort, setSort] = useState<{ key: "created" | "views" | "payments" | "revenue"; dir: "asc" | "desc" }>({ key: "created", dir: "desc" });
 
@@ -248,15 +332,6 @@ export function Dashboard({ onCreate, onView }: {
 
   return (
     <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto" }}>
-      {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, fontSize: 13 }}>
-        <span style={{ color: C.textMuted, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span style={{ fontSize: 14 }}>⌂</span> Home
-        </span>
-        <span style={{ color: C.textFaint }}>/</span>
-        <span style={{ color: C.text, fontWeight: 600 }}>Payment Pages</span>
-      </div>
-
       {/* Page header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div>
@@ -278,6 +353,7 @@ export function Dashboard({ onCreate, onView }: {
           label="Total Pages"
           value={pages.length.toString()}
           accent={C.blue}
+          tip="All payment pages you've created, broken down by their current status."
           variant="breakdown"
           rows={[
             { label: "Active", value: pages.filter(p => p.status === "Active").length.toString(), dot: C.green },
@@ -289,6 +365,7 @@ export function Dashboard({ onCreate, onView }: {
           label="Total Revenue"
           value={formatRevenue(totalRevenue)}
           accent={C.blue}
+          tip="Total money successfully collected across all your payment pages."
           variant="graph"
           trend={DASHBOARD_METRICS.revenueTrend}
           trendStroke={C.blue}
@@ -300,6 +377,7 @@ export function Dashboard({ onCreate, onView }: {
           label="Successful Payments"
           value={DASHBOARD_METRICS.successfulPayments.toLocaleString()}
           accent={C.green}
+          tip="Count of payments that went through, split by the method customers used."
           variant="breakdown"
           rows={DASHBOARD_METRICS.methodSplit.map(m => ({ label: m.method, value: `${m.pct}%` }))}
         />
@@ -307,6 +385,7 @@ export function Dashboard({ onCreate, onView }: {
           label="Failed"
           value={DASHBOARD_METRICS.failed.toLocaleString()}
           accent={C.red}
+          tip="Payment attempts that didn't complete. A falling trend is good — shown in green."
           variant="graph"
           trend={DASHBOARD_METRICS.failedTrend}
           trendStroke={C.red}
@@ -322,7 +401,7 @@ export function Dashboard({ onCreate, onView }: {
         {/* Status tabs — count-pills, the primary status filter. Archived is
             included here as the rightmost tab (it replaces the old footer
             toggle). The active tab gets a blue underline + blue text. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 12px", borderBottom: `1px solid ${C.borderLight}`, overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 12px", borderBottom: `1px solid ${C.borderLight}`, flexWrap: "wrap" }}>
           {STATUS_TABS.map(tab => {
             const isActive = statusTab === tab;
             return (
@@ -454,9 +533,9 @@ export function Dashboard({ onCreate, onView }: {
                           <p onClick={() => onView(page)} style={{ fontSize: 14, color: C.blue, fontWeight: 600, cursor: "pointer", margin: "0 0 2px", lineHeight: 1.3 }}>{page.title}</p>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <p style={{ fontSize: 11, color: C.textFaint, margin: 0, fontFamily: "monospace" }}>pay.enkash.in/{page.slug}</p>
-                            <button onClick={() => navigator.clipboard.writeText(`pay.enkash.in/${page.slug}`)}
-                              style={{ fontSize: 10, background: "none", border: "none", color: C.textFaint, cursor: "pointer", padding: 0 }}>
-                              📋
+                            <button onClick={() => copyLink(page)}
+                              style={{ fontSize: 10, background: "none", border: "none", color: copiedId === page.id ? C.green : C.textFaint, cursor: "pointer", padding: 0 }}>
+                              {copiedId === page.id ? "✓ Copied" : "📋"}
                             </button>
                           </div>
                         </div>
@@ -479,45 +558,15 @@ export function Dashboard({ onCreate, onView }: {
                           style={{ fontSize: 12, color: C.blue, fontWeight: 600, background: C.blueLight, border: "none", cursor: "pointer", borderRadius: radius.sm, padding: "5px 10px", fontFamily: "inherit" }}>
                           View
                         </button>
-                        <div style={{ position: "relative" }}>
-                          <button
-                            onClick={() => setActiveMenu(activeMenu === page.id ? null : page.id)}
-                            style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, border: "none", borderRadius: radius.sm, cursor: "pointer", fontSize: 16, color: C.textMuted, fontFamily: "inherit" }}>
-                            ⋮
-                          </button>
-                          {activeMenu === page.id && (
-                            <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 180, padding: 6 }}>
-                              {[
-                                { label: "📋 Copy Link", action: () => { navigator.clipboard.writeText(`pay.enkash.in/${page.slug}`); setActiveMenu(null); } },
-                                { label: "📝 Edit Page", action: () => { onView(page); setActiveMenu(null); } },
-                                { label: "⧉ Duplicate", action: () => setActiveMenu(null) },
-                                { label: "📊 View Transactions", action: () => { onView(page); setActiveMenu(null); } },
-                              ].map(item => (
-                                <div key={item.label} onClick={item.action}
-                                  style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: C.textSecondary }}
-                                  onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-                                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                                  {item.label}
-                                </div>
-                              ))}
-                              <div style={{ height: 1, background: C.border, margin: "4px 0" }} />
-                              <div onClick={() => toggleArchive(page.id)}
-                                style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: C.textSecondary }}
-                                onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-                                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                                {page.status === "Archived" ? "↩ Unarchive" : "🗄 Archive"}
-                              </div>
-                              {page.status !== "Archived" && (
-                                <div onClick={() => toggleStatus(page.id)}
-                                  style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: page.status === "Active" ? C.red : C.green }}
-                                  onMouseEnter={e => (e.currentTarget.style.background = page.status === "Active" ? C.redBg : C.greenBg)}
-                                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                                  {page.status === "Active" ? "⛔ Deactivate" : "✅ Activate"}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <RowKebab
+                          page={page}
+                          open={activeMenu === page.id}
+                          onToggle={() => setActiveMenu(activeMenu === page.id ? null : page.id)}
+                          onClose={() => setActiveMenu(null)}
+                          onCopy={() => copyLink(page)}
+                          onArchive={() => toggleArchive(page.id)}
+                          onToggleStatus={() => toggleStatus(page.id)}
+                        />
                       </div>
                     </td>
                   </tr>
