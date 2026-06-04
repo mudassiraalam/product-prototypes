@@ -3,35 +3,33 @@ import { ReactNode } from "react";
 import { C, radius, shadow } from "./tokens";
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Left nav — styled to match the production gateway dashboard (image 1):
-// grouped sections with small grey caps labels, a coloured active pill that has
-// a solid left accent bar, consistent icon weight + spacing. The ITEMS are the
-// payment-pages product's own menu (we match the look of image 1, not its
-// gateway-specific items like Settlement Overview / Summary / Account Ledger).
+// Left nav — exact replica of the production gateway dashboard (image 1):
+// "Payment Gateway" as the top active item, then SETTLEMENT OVERVIEW, PAYMENT
+// PRODUCTS and SETTINGS groups with their literal items. The ONLY addition is
+// "Payment Pages" inserted directly under "Payment Links".
 // ──────────────────────────────────────────────────────────────────────────────
+const NAV_TOP = { key: "payment-gateway", icon: "🗔", label: "Payment Gateway" };
+
 const NAV_GROUPS: { label: string; items: { key: string; icon: string; label: string }[] }[] = [
   {
-    label: "Overview",
+    label: "Settlement Overview",
     items: [
-      { key: "analytics", icon: "📊", label: "Analytics" },
-      { key: "transactions", icon: "💳", label: "Transactions" },
-      { key: "orders", icon: "📦", label: "Orders" },
-      { key: "refunds", icon: "↩", label: "Refunds" },
-      { key: "settlements", icon: "🏦", label: "Settlements" },
+      { key: "settlements", icon: "$", label: "Settlements" },
+      { key: "summary", icon: "▤", label: "Summary" },
     ],
   },
   {
     label: "Payment Products",
     items: [
-      { key: "payment-buttons", icon: "🔘", label: "Payment Buttons" },
-      { key: "payment-pages", icon: "📄", label: "Payment Pages" },
       { key: "payment-links", icon: "🔗", label: "Payment Links" },
+      { key: "payment-pages", icon: "📄", label: "Payment Pages" },
     ],
   },
   {
     label: "Settings",
     items: [
       { key: "configuration", icon: "⚙", label: "Configuration" },
+      { key: "account-ledger", icon: "▢", label: "Account Ledger" },
     ],
   },
 ];
@@ -60,12 +58,17 @@ function NavRow({ item, active }: { item: { key: string; icon: string; label: st
 }
 
 export function AppSidebar({ active }: { active: string }) {
+  // In image 1 the top "Payment Gateway" item is the active (blue) one. Here the
+  // prototype's active screen is Payment Pages, so we light that one instead —
+  // but the structure (top item, then the three labelled groups) is identical.
   return (
-    <div style={{ width: 232, background: C.white, borderRight: `1px solid ${C.border}`, padding: "18px 0", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-      {NAV_GROUPS.map((group, gi) => (
+    <div style={{ width: 232, background: C.white, borderRight: `1px solid ${C.border}`, padding: "16px 0", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+      {/* Top product item */}
+      <NavRow item={NAV_TOP} active={NAV_TOP.key === active} />
+
+      {NAV_GROUPS.map(group => (
         <div key={group.label}>
-          {gi > 0 && <div style={{ height: 1, background: C.borderLight, margin: "12px 18px" }} />}
-          <p style={{ fontSize: 10.5, fontWeight: 700, color: C.textFaint, letterSpacing: "0.09em", textTransform: "uppercase", margin: "0 0 6px", padding: "0 20px" }}>{group.label}</p>
+          <p style={{ fontSize: 10.5, fontWeight: 700, color: C.textFaint, letterSpacing: "0.09em", textTransform: "uppercase", margin: "16px 0 6px", padding: "0 20px" }}>{group.label}</p>
           {group.items.map(item => (
             <NavRow key={item.key} item={item} active={item.key === active} />
           ))}
