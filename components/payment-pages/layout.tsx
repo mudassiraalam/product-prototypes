@@ -1,108 +1,157 @@
 "use client";
+import { ReactNode } from "react";
 import { C, radius, shadow } from "./tokens";
 
-const NAV_ITEMS = [
-  { key: "analytics", icon: "📊", label: "Analytics" },
-  { key: "transactions", icon: "💳", label: "Transactions" },
-  { key: "orders", icon: "📦", label: "Orders" },
-  { key: "refunds", icon: "↩", label: "Refunds" },
-  { key: "settlements", icon: "🏦", label: "Settlements" },
+// ──────────────────────────────────────────────────────────────────────────────
+// Left nav — styled to match the production gateway dashboard (image 1):
+// grouped sections with small grey caps labels, a coloured active pill that has
+// a solid left accent bar, consistent icon weight + spacing. The ITEMS are the
+// payment-pages product's own menu (we match the look of image 1, not its
+// gateway-specific items like Settlement Overview / Summary / Account Ledger).
+// ──────────────────────────────────────────────────────────────────────────────
+const NAV_GROUPS: { label: string; items: { key: string; icon: string; label: string }[] }[] = [
+  {
+    label: "Overview",
+    items: [
+      { key: "analytics", icon: "📊", label: "Analytics" },
+      { key: "transactions", icon: "💳", label: "Transactions" },
+      { key: "orders", icon: "📦", label: "Orders" },
+      { key: "refunds", icon: "↩", label: "Refunds" },
+      { key: "settlements", icon: "🏦", label: "Settlements" },
+    ],
+  },
+  {
+    label: "Payment Products",
+    items: [
+      { key: "payment-buttons", icon: "🔘", label: "Payment Buttons" },
+      { key: "payment-pages", icon: "📄", label: "Payment Pages" },
+      { key: "payment-links", icon: "🔗", label: "Payment Links" },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { key: "configuration", icon: "⚙", label: "Configuration" },
+    ],
+  },
 ];
 
-const PAYMENT_ITEMS = [
-  { key: "payment-buttons", icon: "🔘", label: "Payment Buttons" },
-  { key: "payment-pages", icon: "📄", label: "Payment Pages" },
-  { key: "payment-links", icon: "🔗", label: "Payment Links" },
-];
-
-export function AppSidebar({ active }: { active: string }) {
+function NavRow({ item, active }: { item: { key: string; icon: string; label: string }; active: boolean }) {
   return (
-    <div style={{ width: 216, background: C.white, borderRight: `1px solid ${C.border}`, padding: "16px 0", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-      {/* Section header */}
-      <p style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 4px", padding: "0 16px" }}>Overview</p>
-      {NAV_ITEMS.map(item => (
-        <div key={item.key} style={{ margin: "1px 8px" }}>
-          <div style={{ padding: "8px 10px", borderRadius: radius.md, color: C.textMuted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.1s" }}
-            onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-            <span style={{ fontSize: 15 }}>{item.icon}</span>
-            {item.label}
-          </div>
-        </div>
-      ))}
-
-      <div style={{ height: 1, background: C.border, margin: "10px 16px" }} />
-
-      <p style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 4px", padding: "0 16px" }}>Products</p>
-      {PAYMENT_ITEMS.map(item => {
-        const isActive = item.key === active;
-        return (
-          <div key={item.key} style={{ margin: "1px 8px" }}>
-            <div style={{
-              padding: "8px 10px", borderRadius: radius.md, fontSize: 13, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 9, transition: "all 0.1s",
-              background: isActive ? C.blueLight : "transparent",
-              color: isActive ? C.blue : C.textMuted,
-              fontWeight: isActive ? 700 : 400,
-            }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = C.bg; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-              <span style={{ fontSize: 15 }}>{item.icon}</span>
-              {item.label}
-              {isActive && <span style={{ marginLeft: "auto", width: 6, height: 6, borderRadius: "50%", background: C.blue, flexShrink: 0 }} />}
-            </div>
-          </div>
-        );
-      })}
-
-      <div style={{ height: 1, background: C.border, margin: "10px 16px" }} />
-
-      <div style={{ margin: "1px 8px" }}>
-        <div style={{ padding: "8px 10px", borderRadius: radius.md, color: C.textMuted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}
-          onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-          <span style={{ fontSize: 15 }}>⚙</span> Configuration
-        </div>
+    <div style={{ position: "relative", margin: "1px 10px" }}>
+      {/* Solid left accent bar on the active item (matches image 1) */}
+      {active && (
+        <span style={{ position: "absolute", left: -10, top: 4, bottom: 4, width: 3, borderRadius: "0 3px 3px 0", background: C.blue }} />
+      )}
+      <div style={{
+        padding: "9px 11px", borderRadius: radius.md, fontSize: 13.5, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 10, transition: "all 0.1s",
+        background: active ? C.blueLight : "transparent",
+        color: active ? C.blue : C.textSecondary,
+        fontWeight: active ? 700 : 500,
+      }}
+        onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.bg; }}
+        onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}>
+        <span style={{ fontSize: 16, width: 18, textAlign: "center", flexShrink: 0 }}>{item.icon}</span>
+        {item.label}
       </div>
     </div>
   );
 }
 
-export function TopNav() {
+export function AppSidebar({ active }: { active: string }) {
   return (
-    <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: shadow.sm }}>
-      {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 32, height: 32, background: C.blue, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ color: C.white, fontWeight: 800, fontSize: 14 }}>E</span>
+    <div style={{ width: 232, background: C.white, borderRight: `1px solid ${C.border}`, padding: "18px 0", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+      {NAV_GROUPS.map((group, gi) => (
+        <div key={group.label}>
+          {gi > 0 && <div style={{ height: 1, background: C.borderLight, margin: "12px 18px" }} />}
+          <p style={{ fontSize: 10.5, fontWeight: 700, color: C.textFaint, letterSpacing: "0.09em", textTransform: "uppercase", margin: "0 0 6px", padding: "0 20px" }}>{group.label}</p>
+          {group.items.map(item => (
+            <NavRow key={item.key} item={item} active={item.key === active} />
+          ))}
         </div>
-        <span style={{ fontWeight: 800, fontSize: 18, color: C.text, letterSpacing: "-0.02em" }}>
-          En<span style={{ color: C.blue }}>Kash</span>
-        </span>
-        <span style={{ width: 1, height: 20, background: C.border, margin: "0 6px" }} />
-        <span style={{ fontSize: 12, color: C.textFaint, fontWeight: 500 }}>Product Gateway</span>
+      ))}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Breadcrumb — rendered INSIDE the global header (image 1 places the breadcrumb
+// trail in the top bar, not in the page body). Accepts a simple trail array.
+// ──────────────────────────────────────────────────────────────────────────────
+export type Crumb = { label: string; icon?: string };
+
+function HeaderBreadcrumb({ trail }: { trail: Crumb[] }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+      {trail.map((c, i) => {
+        const isLast = i === trail.length - 1;
+        return (
+          <span key={c.label} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: isLast ? C.text : C.textMuted, fontWeight: isLast ? 600 : 500, cursor: isLast ? "default" : "pointer" }}>
+              {c.icon && <span style={{ fontSize: 14 }}>{c.icon}</span>}
+              {c.label}
+            </span>
+            {!isLast && <span style={{ color: C.textFaint }}>/</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function HeaderIconBtn({ children, dot }: { children: ReactNode; dot?: boolean }) {
+  return (
+    <div style={{ width: 36, height: 36, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative", color: C.textMuted, transition: "background 0.1s" }}
+      onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+      {children}
+      {dot && <span style={{ position: "absolute", top: 7, right: 7, width: 7, height: 7, borderRadius: "50%", background: C.red, border: `2px solid ${C.white}` }} />}
+    </div>
+  );
+}
+
+export function TopNav({ breadcrumb }: { breadcrumb?: Crumb[] }) {
+  return (
+    <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: "0 24px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: shadow.sm }}>
+      {/* Left: logo + (optional) breadcrumb */}
+      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, background: C.blue, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: C.white, fontWeight: 800, fontSize: 14 }}>E</span>
+          </div>
+          <span style={{ fontWeight: 800, fontSize: 18, color: C.text, letterSpacing: "-0.02em" }}>
+            En<span style={{ color: C.blue }}>Kash</span>
+          </span>
+        </div>
+        {breadcrumb && breadcrumb.length > 0 && (
+          <>
+            <span style={{ width: 1, height: 22, background: C.border }} />
+            <HeaderBreadcrumb trail={breadcrumb} />
+          </>
+        )}
       </div>
 
-      {/* Right side */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {/* Notification bell */}
-        <div style={{ width: 34, height: 34, borderRadius: radius.md, border: `1.5px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}
-          onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-          onMouseLeave={e => (e.currentTarget.style.background = C.white)}>
-          <span style={{ fontSize: 16 }}>🔔</span>
-          <span style={{ position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: "50%", background: C.red, border: `2px solid ${C.white}` }} />
-        </div>
-        {/* Help */}
-        <div style={{ width: 34, height: 34, borderRadius: radius.md, border: `1.5px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: C.textMuted, fontWeight: 700 }}
-          onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-          onMouseLeave={e => (e.currentTarget.style.background = C.white)}>
-          ?
-        </div>
-        {/* Avatar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 10px 4px 4px", border: `1.5px solid ${C.border}`, borderRadius: radius.full, cursor: "pointer" }}>
-          <div style={{ width: 28, height: 28, background: C.blueLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.blue }}>CA</div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.textSecondary }}>Company Admin</span>
-          <span style={{ fontSize: 10, color: C.textFaint }}>▼</span>
+      {/* Right: help, notifications, app-switcher, user block (image 1 set) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <HeaderIconBtn><span style={{ fontSize: 17, fontWeight: 700 }}>?</span></HeaderIconBtn>
+        <HeaderIconBtn dot><span style={{ fontSize: 17 }}>🔔</span></HeaderIconBtn>
+        {/* App-switcher grid */}
+        <HeaderIconBtn>
+          <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 4px)", gap: 2.5 }}>
+            {Array.from({ length: 9 }).map((_, i) => (
+              <span key={i} style={{ width: 4, height: 4, borderRadius: 1, background: C.textMuted }} />
+            ))}
+          </span>
+        </HeaderIconBtn>
+        <span style={{ width: 1, height: 28, background: C.border, margin: "0 8px" }} />
+        {/* User block — name over role (image 1 layout) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+          <div style={{ textAlign: "right", lineHeight: 1.2 }}>
+            <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text, margin: 0 }}>Alam</p>
+            <p style={{ fontSize: 11.5, color: C.textMuted, margin: 0 }}>Company Admin</p>
+          </div>
+          <div style={{ width: 36, height: 36, background: C.blue, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: C.white }}>A</div>
         </div>
       </div>
     </div>
