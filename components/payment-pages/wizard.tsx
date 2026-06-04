@@ -372,16 +372,12 @@ export function Wizard({ onBack }: { onBack: () => void }) {
     setPhase("wizard");
   };
 
-  // From the type-select screen. If the user is re-entering a type they already
-  // started building, warn before wiping their work; a fresh/changed type just begins.
-  const handleSelectType = (key: PageType) => {
-    const hasProgress = selectedType !== null; // returning from an in-progress build
-    if (hasProgress) {
-      const ok = window.confirm("Going back will discard the changes you've made to this page. Continue?");
-      if (!ok) return;
-    }
-    beginType(key);
-  };
+  // Have any edits been made to the current page vs. a fresh page of this type?
+  const isDirty = () =>
+    selectedType !== null &&
+    JSON.stringify(data) !== JSON.stringify({ ...DEFAULT_WIZARD, pageType: selectedType });
+
+  const handleSelectType = (key: PageType) => beginType(key);
 
   const steps = selectedType ? getStepsForType(selectedType) : [];
   const totalSteps = steps.length;
@@ -404,8 +400,14 @@ export function Wizard({ onBack }: { onBack: () => void }) {
   };
 
   const goBack = () => {
-    if (currentStep > 0) setCurrentStep(s => s - 1);
-    else { setSelectedType(null); setPhase("type-select"); }
+    if (currentStep > 0) { setCurrentStep(s => s - 1); return; }
+    // Step 1 → back to type selection. Warn before discarding any work.
+    if (isDirty() && !window.confirm("Going back will discard the changes you've made to this page. Continue?")) return;
+    setData(DEFAULT_WIZARD);
+    setSelectedType(null);
+    setPublishErrors([]);
+    setCurrentStep(0);
+    setPhase("type-select");
   };
 
   // Pills: jump back to any visited step, or one step ahead. Two-or-more ahead stays locked.
