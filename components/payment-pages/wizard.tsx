@@ -7,6 +7,7 @@ import {
   WizardData, DEFAULT_WIZARD, PageType, getStepsForType,
   StepPageDetails, StepInvoiceDetails,
   StepCustomerFields, StepCustomization, StepSettings,
+  validateWizard, ValidationError,
 } from "./wizard-steps";
 
 const PAGE_TYPES: { key: PageType; icon: string; title: string; tagline: string; desc: string; color: string }[] = [
@@ -87,9 +88,9 @@ function hexAlpha(hex: string, alpha: number) {
 // Wizard Sidebar — vertical step list
 // ──────────────────────────────────────────────────────────────────────────────
 function WizardStepper({
-  steps, currentStep, pageType,
+  steps, currentStep, pageType, onJump,
 }: {
-  steps: { key: string; label: string }[]; currentStep: number; pageType: PageType;
+  steps: { key: string; label: string }[]; currentStep: number; pageType: PageType; onJump: (i: number) => void;
 }) {
   const meta = PAGE_TYPES.find(t => t.key === pageType)!;
   return (
@@ -110,12 +111,20 @@ function WizardStepper({
         {steps.map((s, i) => {
           const done = i < currentStep;
           const active = currentStep === i;
+          // Clickable: any visited step (back) or exactly one ahead. Further stays locked.
+          const clickable = i <= currentStep + 1;
           return (
             <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: radius.md,
-                background: active ? C.blue : "transparent", whiteSpace: "nowrap", transition: "background 0.15s",
-              }}>
+              <div
+                onClick={() => clickable && onJump(i)}
+                role={clickable ? "button" : undefined}
+                title={clickable ? undefined : "Complete the earlier steps first"}
+                style={{
+                  display: "flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: radius.md,
+                  background: active ? C.blue : "transparent", whiteSpace: "nowrap", transition: "background 0.15s",
+                  cursor: clickable ? "pointer" : "not-allowed", opacity: clickable ? 1 : 0.5,
+                }}
+              >
                 <span style={{
                   width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
                   background: done ? C.green : active ? C.white : "transparent",
@@ -350,16 +359,28 @@ export function Wizard({ onBack }: { onBack: () => void }) {
   const [phase, setPhase] = useState<"type-select" | "wizard" | "success">("type-select");
   const [selectedType, setSelectedType] = useState<PageType | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [data, setData] = useState<WizardData>(DEFAULT_WIZARD);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  // Publish-time validation errors, keyed by step index. Empty until a blocked publish.
+  const [publishErrors, setPublishErrors] = useState<ValidationError[]>([]);
 
-  const handleSelectType = (key: PageType) => {
+  const beginType = (key: PageType) => {
     setSelectedType(key);
     setData({ ...DEFAULT_WIZARD, pageType: key });
     setCurrentStep(0);
-    setCompletedSteps([]);
+    setPublishErrors([]);
     setPhase("wizard");
+  };
+
+  // From the type-select screen. If the user is re-entering a type they already
+  // started building, warn before wiping their work; a fresh/changed type just begins.
+  const handleSelectType = (key: PageType) => {
+    const hasProgress = selectedType !== null; // returning from an in-progress build
+    if (hasProgress) {
+      const ok = window.confirm("Going back will discard the changes you've made to this page. Continue?");
+      if (!ok) return;
+    }
+    beginType(key);
   };
 
   const steps = selectedType ? getStepsForType(selectedType) : [];
@@ -367,17 +388,29 @@ export function Wizard({ onBack }: { onBack: () => void }) {
 
   const goNext = () => {
     if (currentStep < totalSteps - 1) {
-      setCompletedSteps(prev => [...new Set([...prev, currentStep])]);
       setCurrentStep(s => s + 1);
     } else {
-      setCompletedSteps(prev => [...new Set([...prev, currentStep])]);
+      // Final step → validate the whole page before publishing.
+      const errors = validateWizard(data);
+      if (errors.length > 0) {
+        setPublishErrors(errors);
+        // Jump to the first step that has a problem so the fix is visible.
+        setCurrentStep(errors[0].step);
+        return;
+      }
+      setPublishErrors([]);
       setPhase("success");
     }
   };
 
   const goBack = () => {
     if (currentStep > 0) setCurrentStep(s => s - 1);
-    else setPhase("type-select");
+    else { setSelectedType(null); setPhase("type-select"); }
+  };
+
+  // Pills: jump back to any visited step, or one step ahead. Two-or-more ahead stays locked.
+  const jumpTo = (i: number) => {
+    if (i <= currentStep + 1 && i >= 0 && i < totalSteps) setCurrentStep(i);
   };
 
   // Render step 1 based on type
@@ -419,13 +452,31 @@ export function Wizard({ onBack }: { onBack: () => void }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
       {/* Horizontal stepper — second header row, full width */}
-      <WizardStepper steps={steps} currentStep={currentStep} pageType={selectedType ?? "page"} />
+      <WizardStepper steps={steps} currentStep={currentStep} pageType={selectedType ?? "page"} onJump={jumpTo} />
 
       {/* Form + preview row */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
         {/* Form area */}
         <div style={{ width: 460, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, flexShrink: 0, background: C.white }}>
           <div style={{ flex: 1, padding: "26px 28px", overflowY: "auto" }}>
+            {/* Publish-time validation summary — only after a blocked publish */}
+            {publishErrors.length > 0 && (
+              <div style={{ background: C.redBg, border: `1px solid ${C.redMid}`, borderRadius: radius.md, padding: "12px 14px", marginBottom: 20 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: C.red, margin: "0 0 6px" }}>
+                  Fix {publishErrors.length} {publishErrors.length === 1 ? "issue" : "issues"} before publishing
+                </p>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  {publishErrors.map((e, i) => (
+                    <li key={i} style={{ fontSize: 12, color: C.textSecondary, lineHeight: 1.6 }}>
+                      <button onClick={() => jumpTo(e.step)} style={{ background: "none", border: "none", padding: 0, color: C.red, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>
+                        Step {e.step + 1}
+                      </button>
+                      {" — "}{e.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {stepComponents[currentStep]}
           </div>
           <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
