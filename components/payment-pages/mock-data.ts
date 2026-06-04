@@ -1,3 +1,5 @@
+import type { WizardData } from "./wizard-steps";
+
 export type PageStatus = "Active" | "Inactive" | "Draft" | "Expired" | "Archived";
 
 // Primary type — matches the 2 creation flows.
@@ -26,6 +28,12 @@ export interface PaymentPage {
   theme: "light" | "dark";
   layout: "centered" | "wide";
   description?: string;
+  // Full builder state, stored when a page is created/saved through the wizard so
+  // drafts (and edits of in-session pages) reopen losslessly. Absent on the seed
+  // mock rows — those get believable details fabricated on demand instead.
+  draftData?: WizardData;
+  // Step the merchant was on when they saved a draft, so resume lands there.
+  lastStep?: number;
 }
 
 // 5 examples — each demonstrates a different page configuration the new
