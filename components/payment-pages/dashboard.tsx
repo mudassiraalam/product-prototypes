@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import { StatusBadge, Btn, useClickOutside } from "./primitives";
-import { INITIAL_PAGES, PaymentPage, PageStatus, PageType, DASHBOARD_METRICS } from "./mock-data";
+import { PaymentPage, PageStatus, PageType, DASHBOARD_METRICS } from "./mock-data";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Type-level colors (primary). Kind-level icons/colors come from getKindInfo().
@@ -37,7 +37,12 @@ function Sparkline({ data, stroke, fill }: { data: readonly number[]; stroke: st
   const min = Math.min(...data), max = Math.max(...data);
   const span = max - min || 1;
   const stepX = (W - pad * 2) / (data.length - 1);
-  const pts = data.map((v, i) => [pad + i * stepX, pad + (H - pad * 2) * (1 - (v - min) / span)] as [number, number]);
+  // Use only a centered band of the height (not the full box) so the line stays
+  // gentle — matches the production cards instead of stretching to the extremes.
+  const amp = 0.5;
+  const usable = (H - pad * 2) * amp;
+  const top = pad + ((H - pad * 2) - usable) / 2;
+  const pts = data.map((v, i) => [pad + i * stepX, top + usable * (1 - (v - min) / span)] as [number, number]);
   const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
   const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
   return (
@@ -198,11 +203,12 @@ const baseInp: React.CSSProperties = {
   fontSize: 13, color: C.text, outline: "none", background: C.white, fontFamily: "inherit",
 };
 
-export function Dashboard({ onCreate, onView }: {
+export function Dashboard({ pages, setPages, onCreate, onView }: {
+  pages: PaymentPage[];
+  setPages: React.Dispatch<React.SetStateAction<PaymentPage[]>>;
   onCreate: () => void;
   onView: (page: PaymentPage) => void;
 }) {
-  const [pages, setPages] = useState<PaymentPage[]>(INITIAL_PAGES);
   const [search, setSearch] = useState("");
   // Single source of truth for the status tab row. "Archived" is now one of the
   // tabs (it replaces the old footer toggle), so the dashboard never needs a
