@@ -185,8 +185,10 @@ export const DASHBOARD_METRICS = {
   // which is GOOD news, so the card renders it green with a down arrow.
   failed: 182,
   failedDeltaPct: -4,
-  // Sharp peaks/valleys, TRENDING DOWN overall to agree with "down 4%".
-  failedTrend: [40, 52, 38, 48, 33, 44, 30],
+  // A clearly DECLINING series (one minor early bump, then a steady fall) so the
+  // card reads unambiguously as "failures coming down" — no late up-spike that
+  // could be misread as a problem. Agrees with the −4% green/down delta.
+  failedTrend: [56, 48, 51, 40, 36, 31, 24],
 
   // Total revenue — 7d delta is positive (more revenue), rendered green/up.
   revenueDeltaPct: 18,
