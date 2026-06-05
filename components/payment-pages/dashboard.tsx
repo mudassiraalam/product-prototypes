@@ -1,7 +1,9 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { C, radius, shadow } from "./tokens";
 import { StatusBadge, Btn, useClickOutside } from "./primitives";
+import { Icon, IconName } from "./icons";
 import { PaymentPage, PageStatus, PageType, DASHBOARD_METRICS } from "./mock-data";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -16,15 +18,15 @@ const TYPE_COLORS: Record<PageType, string> = {
 // not shown in the Type column — that would imply the merchant selected it,
 // when in fact it's inferred from amountType + isDonation + itemsAreTickets.
 // The icon alone preserves visual scannability without misleading the merchant.
-type KindInfo = { label: string; icon: string; color: string };
+type KindInfo = { label: string; icon: IconName; color: string };
 
 function getKindInfo(page: PaymentPage): KindInfo {
-  if (page.type === "Invoice") return { label: "Invoice", icon: "📃", color: "#0891b2" };
-  if (page.isDonation) return { label: "Donation", icon: "❤️", color: "#e11d48" };
-  if (page.itemsAreTickets) return { label: "Event Tickets", icon: "🎟", color: "#7c3aed" };
-  if (page.amountType === "multiple") return { label: "Multiple Items", icon: "🛍️", color: "#1c5af4" };
-  if (page.amountType === "customer") return { label: "Customer Decides", icon: "💰", color: "#16a34a" };
-  return { label: "Fixed Price", icon: "💳", color: "#1c5af4" };
+  if (page.type === "Invoice") return { label: "Invoice", icon: "invoice", color: "#0891b2" };
+  if (page.isDonation) return { label: "Donation", icon: "donation", color: "#e11d48" };
+  if (page.itemsAreTickets) return { label: "Event Tickets", icon: "ticket", color: "#7c3aed" };
+  if (page.amountType === "multiple") return { label: "Multiple Items", icon: "bag", color: "#1c5af4" };
+  if (page.amountType === "customer") return { label: "Customer Decides", icon: "coins", color: "#16a34a" };
+  return { label: "Fixed Price", icon: "card", color: "#1c5af4" };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -69,19 +71,36 @@ function DeltaChip({ deltaPct, positive }: { deltaPct: number; positive: boolean
   );
 }
 
-// Help "?" with a real hover tooltip explaining the metric. Renders BELOW the
-// dot so the scroll container's top edge never clips it.
+// Help "?" with a real hover tooltip explaining the metric. The tooltip is
+// rendered in a portal on <body> with fixed positioning, so it can never be
+// clipped by the stat card's `overflow: hidden` and is clamped to the viewport
+// (the rightmost "Failed" card used to get sliced on its right edge).
 function HelpDot({ tip }: { tip: string }) {
   const [show, setShow] = useState(false);
+  const dotRef = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; arrow: number }>({ left: 0, top: 0, arrow: 0 });
+  const W = 200, GAP = 8, MARGIN = 8;
+
+  useLayoutEffect(() => {
+    if (!show || !dotRef.current) return;
+    const r = dotRef.current.getBoundingClientRect();
+    const center = r.left + r.width / 2;
+    let left = center - W / 2;
+    left = Math.max(MARGIN, Math.min(left, window.innerWidth - W - MARGIN));
+    const top = r.bottom + GAP;
+    setPos({ left, top, arrow: center - left }); // arrow tracks the dot even when clamped
+  }, [show]);
+
   return (
-    <span style={{ position: "relative", display: "inline-flex" }}
+    <span ref={dotRef} style={{ position: "relative", display: "inline-flex" }}
       onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       <span style={{ width: 14, height: 14, borderRadius: "50%", border: `1.2px solid ${C.textFaint}`, color: C.textFaint, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", lineHeight: 1 }}>?</span>
-      {show && (
-        <span style={{ position: "absolute", top: "calc(100% + 7px)", left: "50%", transform: "translateX(-50%)", width: 200, background: C.navy, color: C.white, fontSize: 11.5, fontWeight: 500, lineHeight: 1.5, padding: "8px 10px", borderRadius: radius.md, boxShadow: shadow.lg, zIndex: 60, textTransform: "none", letterSpacing: 0 }}>
-          <span style={{ position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: `5px solid ${C.navy}` }} />
+      {show && typeof document !== "undefined" && createPortal(
+        <span style={{ position: "fixed", left: pos.left, top: pos.top, width: W, background: C.navy, color: C.white, fontSize: 11.5, fontWeight: 500, lineHeight: 1.5, padding: "8px 10px", borderRadius: radius.md, boxShadow: shadow.lg, zIndex: 1000, textTransform: "none", letterSpacing: 0, pointerEvents: "none" }}>
+          <span style={{ position: "absolute", bottom: "100%", left: pos.arrow, transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: `5px solid ${C.navy}` }} />
           {tip}
-        </span>
+        </span>,
+        document.body
       )}
     </span>
   );
@@ -176,20 +195,20 @@ function RowKebab({ page, open, onToggle, onClose, onCopy, onArchive, onToggleSt
           <div onClick={() => { onCopy(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }}
             onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-            📋 Copy Link
+            <Icon name="copy" size={15} /> Copy Link
           </div>
           <div style={{ height: 1, background: C.border, margin: "4px 0" }} />
           <div onClick={() => { onArchive(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }}
             onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-            {page.status === "Archived" ? "↩ Unarchive" : "🗄 Archive"}
+            {page.status === "Archived" ? <>↩ Unarchive</> : <><Icon name="archive" size={15} /> Archive</>}
           </div>
           {page.status !== "Archived" && (
             <div onClick={() => { onToggleStatus(); onClose(); }}
               style={{ ...itemStyle, color: page.status === "Active" ? C.red : C.green }}
               onMouseEnter={e => (e.currentTarget.style.background = page.status === "Active" ? C.redBg : C.greenBg)}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-              {page.status === "Active" ? "⛔ Deactivate" : "✅ Activate"}
+              {page.status === "Active" ? <><Icon name="ban" size={15} /> Deactivate</> : <><Icon name="checkCircle" size={15} /> Activate</>}
             </div>
           )}
         </div>
@@ -423,7 +442,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
             <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
-              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: C.textFaint }}>🔍</span>
+              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.textFaint, display: "inline-flex" }}><Icon name="search" size={15} /></span>
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Search by title, slug or ID..."
                 style={{ ...baseInp, width: "100%", paddingLeft: 32 }} />
@@ -439,15 +458,15 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
             <div style={{ position: "relative" }}>
               <button onClick={() => setExportOpen(o => !o)}
                 style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}>
-                ⬇ Export
+                <Icon name="download" size={15} /> Export
               </button>
               {exportOpen && (
                 <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 200, padding: 6 }}>
                   <div onClick={exportCsv}
-                    style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: C.textSecondary }}
+                    style={{ padding: "8px 12px", cursor: "pointer", borderRadius: radius.sm, fontSize: 13, color: C.textSecondary, display: "flex", alignItems: "center", gap: 8 }}
                     onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    📄 Download as CSV
+                    <Icon name="download" size={15} /> Download as CSV
                   </div>
                   <p style={{ fontSize: 11, color: C.textFaint, margin: "4px 8px 2px", lineHeight: 1.4 }}>
                     Exports {sorted.length} page{sorted.length === 1 ? "" : "s"} matching your current filters.
@@ -520,16 +539,16 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                     <td style={{ padding: "13px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: radius.md, background: kind.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-                          {kind.icon}
+                        <div style={{ width: 36, height: 36, borderRadius: radius.md, background: kind.color + "18", display: "flex", alignItems: "center", justifyContent: "center", color: kind.color, flexShrink: 0 }}>
+                          <Icon name={kind.icon} size={18} />
                         </div>
                         <div>
                           <p onClick={() => onView(page)} style={{ fontSize: 14, color: C.blue, fontWeight: 600, cursor: "pointer", margin: "0 0 2px", lineHeight: 1.3 }}>{page.title}</p>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <p style={{ fontSize: 11, color: C.textFaint, margin: 0, fontFamily: "monospace" }}>pay.enkash.in/{page.slug}</p>
                             <button onClick={() => copyLink(page)}
-                              style={{ fontSize: 10, background: "none", border: "none", color: copiedId === page.id ? C.green : C.textFaint, cursor: "pointer", padding: 0 }}>
-                              {copiedId === page.id ? "✓ Copied" : "📋"}
+                              style={{ fontSize: 10, background: "none", border: "none", color: copiedId === page.id ? C.green : C.textFaint, cursor: "pointer", padding: 0, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                              {copiedId === page.id ? "✓ Copied" : <Icon name="copy" size={13} />}
                             </button>
                           </div>
                         </div>
