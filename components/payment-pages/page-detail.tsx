@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Modal, StatusBadge, Btn, Inp, Toggle, SegmentedControl } from "./primitives";
+import { Icon, IconName } from "./icons";
 import { PaymentPage } from "./mock-data";
 import { TRANSACTIONS } from "./mock-data";
 import { PagePreview } from "./page-preview";
@@ -65,11 +66,11 @@ function ShareModal({ page, onClose }: { page: PaymentPage; onClose: () => void 
   ${page.buttonLabel}
 </a>`;
 
-  const shareLinks = [
-    { name: "WhatsApp", color: "#25d366", icon: "💬", url: `https://wa.me/?text=Hi, please make your payment here: ${url}` },
-    { name: "Email", color: "#ea4335", icon: "📧", url: `mailto:?subject=Payment Request&body=Please complete your payment here: ${url}` },
-    { name: "X (Twitter)", color: "#000000", icon: "𝕏", url: `https://twitter.com/intent/tweet?text=Make your payment here: ${url}` },
-    { name: "Facebook", color: "#1877f2", icon: "f", url: `https://www.facebook.com/sharer/sharer.php?u=${url}` },
+  const shareLinks: { name: string; color: string; icon: IconName; url: string }[] = [
+    { name: "WhatsApp", color: "#25d366", icon: "whatsapp", url: `https://wa.me/?text=Hi, please make your payment here: ${url}` },
+    { name: "Email", color: "#ea4335", icon: "mail", url: `mailto:?subject=Payment Request&body=Please complete your payment here: ${url}` },
+    { name: "X (Twitter)", color: "#000000", icon: "x", url: `https://twitter.com/intent/tweet?text=Make your payment here: ${url}` },
+    { name: "Facebook", color: "#1877f2", icon: "facebook", url: `https://www.facebook.com/sharer/sharer.php?u=${url}` },
   ];
 
   return (
@@ -121,8 +122,8 @@ function ShareModal({ page, onClose }: { page: PaymentPage; onClose: () => void 
                   style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `1.5px solid ${C.border}`, borderRadius: radius.md, textDecoration: "none", transition: "border-color 0.15s" }}
                   onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.borderColor = s.color)}
                   onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.borderColor = C.border)}>
-                  <div style={{ width: 32, height: 32, borderRadius: radius.sm, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", color: C.white, fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
-                    {s.icon}
+                  <div style={{ width: 32, height: 32, borderRadius: radius.sm, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", color: C.white, flexShrink: 0 }}>
+                    <Icon name={s.icon} size={16} />
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.name}</span>
                 </a>
@@ -154,12 +155,12 @@ function TransactionsModal({ page, onClose }: { page: PaymentPage; onClose: () =
             <>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.blueDark }}>{selected.length} selected</span>
               <div style={{ display: "flex", gap: 8 }}>
-                <button style={{ fontSize: 12.5, color: C.blueDark, background: C.white, border: `1px solid ${C.blueMid}`, borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>⬇ Export selected</button>
+                <button style={{ fontSize: 12.5, color: C.blueDark, background: C.white, border: `1px solid ${C.blueMid}`, borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Export selected</button>
                 <button
                   disabled={refundableSelected === 0}
                   title={refundableSelected === 0 ? "Only successful payments can be refunded" : undefined}
-                  style={{ fontSize: 12.5, color: refundableSelected ? C.white : C.textFaint, background: refundableSelected ? C.red : C.redBg, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: refundableSelected ? "pointer" : "not-allowed", fontWeight: 600, fontFamily: "inherit" }}>
-                  ↺ Initiate refund{refundableSelected ? ` (${refundableSelected})` : ""}
+                  style={{ fontSize: 12.5, color: refundableSelected ? C.white : C.textFaint, background: refundableSelected ? C.red : C.redBg, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: refundableSelected ? "pointer" : "not-allowed", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="refresh" size={14} /> Initiate refund{refundableSelected ? ` (${refundableSelected})` : ""}
                 </button>
                 <button onClick={() => setSelected([])} style={{ fontSize: 12.5, color: C.textMuted, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>Clear</button>
               </div>
@@ -167,7 +168,7 @@ function TransactionsModal({ page, onClose }: { page: PaymentPage; onClose: () =
           ) : (
             <>
               <span style={{ background: C.greenBg, color: C.green, borderRadius: radius.full, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>• Active</span>
-              <button style={{ fontSize: 12, color: C.blue, background: C.blueLight, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>⬇ Export CSV</button>
+              <button style={{ fontSize: 12, color: C.blue, background: C.blueLight, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Export CSV</button>
             </>
           )}
         </div>
@@ -221,7 +222,7 @@ function PreviewModal({ page, data, onClose }: { page: PaymentPage; data: Wizard
       <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ width: 240 }}>
           <SegmentedControl
-            options={[{ key: "desktop", label: "🖥 Desktop" }, { key: "mobile", label: "📱 Mobile" }]}
+            options={[{ key: "desktop", label: "Desktop" }, { key: "mobile", label: "Mobile" }]}
             value={device}
             onChange={v => setDevice(v as "desktop" | "mobile")}
           />
@@ -380,13 +381,13 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
           {/* Quick actions */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
             {[
-              { icon: "📨", title: "Receipt Configuration", desc: "Configure automatic email receipts sent after payment", action: () => setActiveModal("receipt") },
-              { icon: "↪️", title: "Redirect & Webhook", desc: "Set post-payment redirect URL and webhook endpoint", action: () => setActiveModal("redirect") },
+              { icon: <Icon name="receipt" size={22} />, title: "Receipt Configuration", desc: "Configure automatic email receipts sent after payment", action: () => setActiveModal("receipt") },
+              { icon: <Icon name="redirect" size={22} />, title: "Redirect & Webhook", desc: "Set post-payment redirect URL and webhook endpoint", action: () => setActiveModal("redirect") },
             ].map(c => (
               <div key={c.title} onClick={c.action} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "16px 18px", cursor: "pointer", transition: "border-color 0.15s, box-shadow 0.15s", display: "flex", gap: 14, alignItems: "flex-start" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = C.blue; (e.currentTarget as HTMLDivElement).style.boxShadow = shadow.md; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = C.border; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}>
-                <span style={{ fontSize: 22, flexShrink: 0 }}>{c.icon}</span>
+                <span style={{ flexShrink: 0, color: C.blue, marginTop: 1 }}>{c.icon}</span>
                 <div>
                   <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 3px" }}>{c.title}</p>
                   <p style={{ fontSize: 12, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>{c.desc}</p>
@@ -402,8 +403,8 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Preview</p>
               <button onClick={() => setActiveModal("preview")}
-                style={{ fontSize: 11, color: C.blue, fontWeight: 700, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                Open ⤢
+                style={{ fontSize: 11, color: C.blue, fontWeight: 700, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                Open <Icon name="expand" size={12} />
               </button>
             </div>
             <div style={{ maxHeight: 520, overflow: "auto", background: "#e9ecf3", padding: "12px" }}>
