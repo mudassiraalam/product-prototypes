@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { C, radius, shadow } from "./tokens";
+import { Icon, EnkashLogo } from "./icons";
 import type { WizardData, PaymentMethod } from "./wizard-steps";
 import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
 
@@ -126,7 +127,7 @@ function DesktopPreview(p: PreviewProps) {
             <span style={{ fontSize: 16, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "Your Brand"}</span>
           </div>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
-            <span style={{ fontSize: 11 }}>🔒</span>
+            <Icon name="lock" size={12} />
             Secured by
             <span style={{ fontWeight: 700, color: C.blue }}>EnKash</span>
           </span>
@@ -174,8 +175,8 @@ function DesktopPreview(p: PreviewProps) {
             {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Event Info</p>
-                {data.eventDate && <InfoLine icon="📅" text={`${formatDate(data.eventDate)}${data.eventTime ? ` · ${data.eventTime}` : ""}`} color={text} />}
-                {data.eventVenue && <InfoLine icon="📍" text={data.eventVenue} color={text} />}
+                {data.eventDate && <InfoLine icon={<Icon name="calendar" size={13} />} text={`${formatDate(data.eventDate)}${data.eventTime ? ` · ${data.eventTime}` : ""}`} color={text} />}
+                {data.eventVenue && <InfoLine icon={<Icon name="mapPin" size={13} />} text={data.eventVenue} color={text} />}
               </div>
             )}
 
@@ -183,18 +184,18 @@ function DesktopPreview(p: PreviewProps) {
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Invoice Details</p>
                 {data.invoiceNumber && <InfoLine icon="#" text={`Invoice ${data.invoiceNumber}`} color={text} />}
-                {data.dueDate && <InfoLine icon="⏰" text={`Due ${formatDate(data.dueDate)}`} color={text} />}
-                {data.customerName && <InfoLine icon="👤" text={`Bill to: ${data.customerName}`} color={text} />}
+                {data.dueDate && <InfoLine icon={<Icon name="clock" size={13} />} text={`Due ${formatDate(data.dueDate)}`} color={text} />}
+                {data.customerName && <InfoLine icon={<Icon name="user" size={13} />} text={`Bill to: ${data.customerName}`} color={text} />}
               </div>
             )}
 
             {(data.contactEmail || data.contactPhone || data.contactWhatsapp || data.contactWebsite) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Contact Us</p>
-                {data.contactEmail && <ContactLine icon="✉" label={data.contactEmail} color={text} brand={data.brandColor} />}
-                {data.contactPhone && <ContactLine icon="☎" label={data.contactPhone} color={text} brand={data.brandColor} />}
-                {data.contactWhatsapp && <ContactLine icon="💬" label={data.contactWhatsapp} color={text} brand={data.brandColor} />}
-                {data.contactWebsite && <ContactLine icon="🌐" label={data.contactWebsite} color={text} brand={data.brandColor} link />}
+                {data.contactEmail && <ContactLine icon={<Icon name="mail" size={13} />} label={data.contactEmail} color={text} brand={data.brandColor} />}
+                {data.contactPhone && <ContactLine icon={<Icon name="phone" size={13} />} label={data.contactPhone} color={text} brand={data.brandColor} />}
+                {data.contactWhatsapp && <ContactLine icon={<Icon name="whatsapp" size={13} />} label={data.contactWhatsapp} color={text} brand={data.brandColor} />}
+                {data.contactWebsite && <ContactLine icon={<Icon name="globe" size={13} />} label={data.contactWebsite} color={text} brand={data.brandColor} link />}
                 {data.supportLink && <ContactLine icon="?" label="Support Center" color={text} brand={data.brandColor} link />}
               </div>
             )}
@@ -233,8 +234,8 @@ function DesktopPreview(p: PreviewProps) {
 
             {!data.longDescription && !data.contactEmail && !data.contactPhone && !data.socialTwitter && !data.socialInstagram && !data.socialFacebook && !data.socialLinkedin && !(data as any).galleryImages?.length && (
               <div style={{ background: subtleBg, border: `1px dashed ${border}`, borderRadius: radius.md, padding: "20px 16px", textAlign: "center" }}>
-                <p style={{ fontSize: 20, margin: "0 0 8px" }}>
-                  {data.pageType === "invoice" ? "🧾" : (data.amountType === "customer" && data.isDonation) ? "🤝" : (data.amountType === "multiple" && data.itemsAreTickets) ? "🎟️" : "🛍️"}
+                <p style={{ margin: "0 0 8px", color: textMuted, display: "flex", justifyContent: "center" }}>
+                  <Icon name={data.pageType === "invoice" ? "receipt" : (data.amountType === "customer" && data.isDonation) ? "donation" : (data.amountType === "multiple" && data.itemsAreTickets) ? "ticket" : "bag"} size={26} />
                 </p>
                 <p style={{ fontSize: 13, fontWeight: 600, color: textMuted, margin: "0 0 4px" }}>
                   {data.pageType === "invoice" ? "Add notes for your client" : (data.amountType === "customer" && data.isDonation) ? "Add details about your cause" : (data.amountType === "multiple" && data.itemsAreTickets) ? "Tell customers about your event" : "Add info about your product or service"}
@@ -272,7 +273,9 @@ function DesktopPreview(p: PreviewProps) {
           <p style={{ fontSize: 11, color: textFaint, margin: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
             Powered by
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, color: text }}>
-              <span style={{ width: 15, height: 15, background: C.blue, borderRadius: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", color: C.white, fontSize: 9, fontWeight: 800 }}>E</span>
+              <span style={{ width: 16, height: 16, background: "#fff", borderRadius: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${border}`, overflow: "hidden" }}>
+                <EnkashLogo variant="mark" height={11} />
+              </span>
               EnKash
             </span>
           </p>
@@ -327,8 +330,8 @@ function MobilePreview(p: PreviewProps) {
 
         {/* Tab switcher */}
         <div style={{ display: "flex", borderBottom: `1px solid ${border}` }}>
-          <button style={tabStyle(tab === "info")} onClick={() => setTab("info")}>ℹ Info</button>
-          <button style={tabStyle(tab === "pay")} onClick={() => setTab("pay")}>💳 Pay</button>
+          <button style={tabStyle(tab === "info")} onClick={() => setTab("info")}><Icon name="page" size={13} style={{ marginRight: 5 }} />Info</button>
+          <button style={tabStyle(tab === "pay")} onClick={() => setTab("pay")}><Icon name="card" size={13} style={{ marginRight: 5 }} />Pay</button>
         </div>
 
         {/* Info tab */}
@@ -351,16 +354,16 @@ function MobilePreview(p: PreviewProps) {
             {/* Event-specific info */}
             {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ background: subtleBg, borderRadius: radius.sm, padding: "10px 12px", marginBottom: 12, fontSize: 12 }}>
-                {data.eventDate && <p style={{ margin: "0 0 4px", color: text }}>📅 {data.eventDate}{data.eventTime ? ` at ${data.eventTime}` : ""}</p>}
-                {data.eventVenue && <p style={{ margin: 0, color: text }}>📍 {data.eventVenue}</p>}
+                {data.eventDate && <p style={{ margin: "0 0 4px", color: text, display: "flex", alignItems: "center", gap: 6 }}><Icon name="calendar" size={12} /> {data.eventDate}{data.eventTime ? ` at ${data.eventTime}` : ""}</p>}
+                {data.eventVenue && <p style={{ margin: 0, color: text, display: "flex", alignItems: "center", gap: 6 }}><Icon name="mapPin" size={12} /> {data.eventVenue}</p>}
               </div>
             )}
 
             {(data.contactEmail || data.contactPhone) && (
               <div style={{ marginBottom: 12 }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>Contact</p>
-                {data.contactEmail && <p style={{ fontSize: 12, color: text, margin: "0 0 3px" }}>✉ {data.contactEmail}</p>}
-                {data.contactPhone && <p style={{ fontSize: 12, color: text, margin: 0 }}>☎ {data.contactPhone}</p>}
+                {data.contactEmail && <p style={{ fontSize: 12, color: text, margin: "0 0 3px", display: "flex", alignItems: "center", gap: 6 }}><Icon name="mail" size={12} /> {data.contactEmail}</p>}
+                {data.contactPhone && <p style={{ fontSize: 12, color: text, margin: 0, display: "flex", alignItems: "center", gap: 6 }}><Icon name="phone" size={12} /> {data.contactPhone}</p>}
               </div>
             )}
 
@@ -373,7 +376,7 @@ function MobilePreview(p: PreviewProps) {
 
             {!data.longDescription && !(data as any).galleryImages?.length && !data.contactEmail && !data.contactPhone && (
               <div style={{ textAlign: "center", padding: "20px 0", color: textFaint, fontSize: 12 }}>
-                <p style={{ margin: "0 0 4px", fontSize: 20 }}>🛍️</p>
+                <p style={{ margin: "0 0 4px", display: "flex", justifyContent: "center" }}><Icon name="bag" size={22} /></p>
                 <p style={{ margin: 0 }}>Fill in Step 1 to see your page info here</p>
               </div>
             )}
@@ -700,7 +703,7 @@ function BillingPanel({
         boxShadow: `0 6px 18px ${hexAlpha(data.brandColor, 0.32)}`,
         marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 13 }}>🔒</span>
+        <Icon name="lock" size={13} />
         {data.buttonLabel || "Pay Securely"} {total}
         <span style={{ fontSize: 14 }}>›</span>
       </button>
@@ -857,19 +860,19 @@ function MethodInput({
 // ──────────────────────────────────────────────────────────────────────────────
 // Small UI helpers
 // ──────────────────────────────────────────────────────────────────────────────
-function InfoLine({ icon, text, color }: { icon: string; text: string; color: string }) {
+function InfoLine({ icon, text, color }: { icon: React.ReactNode; text: string; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color, marginBottom: 4 }}>
-      <span style={{ fontSize: 12, opacity: 0.7 }}>{icon}</span>
+      <span style={{ fontSize: 12, opacity: 0.7, display: "inline-flex", alignItems: "center" }}>{icon}</span>
       <span>{text}</span>
     </div>
   );
 }
 
-function ContactLine({ icon, label, color, brand, link, small }: { icon: string; label: string; color: string; brand: string; link?: boolean; small?: boolean }) {
+function ContactLine({ icon, label, color, brand, link, small }: { icon: React.ReactNode; label: string; color: string; brand: string; link?: boolean; small?: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: small ? 11 : 12, color: link ? brand : color, marginBottom: 4, textDecoration: link ? "underline" : "none" }}>
-      <span style={{ fontSize: 12, opacity: 0.7, color }}>{icon}</span>
+      <span style={{ fontSize: 12, opacity: 0.7, color, display: "inline-flex", alignItems: "center" }}>{icon}</span>
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 240 }}>{label}</span>
     </div>
   );
