@@ -1,6 +1,7 @@
 "use client";
 import { ReactNode } from "react";
 import { C, radius, shadow } from "./tokens";
+import { Icon, IconName, EnkashLogo } from "./icons";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Left nav — exact replica of the production gateway dashboard (image 1):
@@ -8,33 +9,34 @@ import { C, radius, shadow } from "./tokens";
 // PRODUCTS and SETTINGS groups with their literal items. The ONLY addition is
 // "Payment Pages" inserted directly under "Payment Links".
 // ──────────────────────────────────────────────────────────────────────────────
-const NAV_TOP = { key: "payment-gateway", icon: "🗔", label: "Payment Gateway" };
+type NavItem = { key: string; icon: IconName; label: string };
+const NAV_TOP: NavItem = { key: "payment-gateway", icon: "gateway", label: "Payment Gateway" };
 
-const NAV_GROUPS: { label: string; items: { key: string; icon: string; label: string }[] }[] = [
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Settlement Overview",
     items: [
-      { key: "settlements", icon: "$", label: "Settlements" },
-      { key: "summary", icon: "▤", label: "Summary" },
+      { key: "settlements", icon: "settlements", label: "Settlements" },
+      { key: "summary", icon: "summary", label: "Summary" },
     ],
   },
   {
     label: "Payment Products",
     items: [
-      { key: "payment-links", icon: "🔗", label: "Payment Links" },
-      { key: "payment-pages", icon: "📄", label: "Payment Pages" },
+      { key: "payment-links", icon: "link", label: "Payment Links" },
+      { key: "payment-pages", icon: "page", label: "Payment Pages" },
     ],
   },
   {
     label: "Settings",
     items: [
-      { key: "configuration", icon: "⚙", label: "Configuration" },
-      { key: "account-ledger", icon: "▢", label: "Account Ledger" },
+      { key: "configuration", icon: "settings", label: "Configuration" },
+      { key: "account-ledger", icon: "ledger", label: "Account Ledger" },
     ],
   },
 ];
 
-function NavRow({ item, active }: { item: { key: string; icon: string; label: string }; active: boolean }) {
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <div style={{ position: "relative", margin: "1px 10px" }}>
       {/* Solid left accent bar on the active item (matches image 1) */}
@@ -50,7 +52,7 @@ function NavRow({ item, active }: { item: { key: string; icon: string; label: st
       }}
         onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.bg; }}
         onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}>
-        <span style={{ fontSize: 16, width: 18, textAlign: "center", flexShrink: 0 }}>{item.icon}</span>
+        <span style={{ width: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={item.icon} size={17} /></span>
         {item.label}
       </div>
     </div>
@@ -92,7 +94,7 @@ function HeaderBreadcrumb({ trail }: { trail: Crumb[] }) {
         return (
           <span key={c.label} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: isLast ? C.text : C.textMuted, fontWeight: isLast ? 600 : 500, cursor: isLast ? "default" : "pointer" }}>
-              {c.icon && <span style={{ fontSize: 14 }}>{c.icon}</span>}
+              {c.icon && <Icon name={c.icon as IconName} size={14} />}
               {c.label}
             </span>
             {!isLast && <span style={{ color: C.textFaint }}>/</span>}
@@ -123,14 +125,9 @@ export function TopNav({ breadcrumb, onHome }: { breadcrumb?: Crumb[]; onHome?: 
           onClick={onHome}
           role={onHome ? "button" : undefined}
           title={onHome ? "Go to dashboard" : undefined}
-          style={{ display: "flex", alignItems: "center", gap: 10, cursor: onHome ? "pointer" : "default" }}
+          style={{ display: "flex", alignItems: "center", cursor: onHome ? "pointer" : "default" }}
         >
-          <div style={{ width: 32, height: 32, background: C.blue, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: C.white, fontWeight: 800, fontSize: 14 }}>E</span>
-          </div>
-          <span style={{ fontWeight: 800, fontSize: 18, color: C.text, letterSpacing: "-0.02em" }}>
-            En<span style={{ color: C.blue }}>Kash</span>
-          </span>
+          <EnkashLogo variant="wordmark" height={26} />
         </div>
         {breadcrumb && breadcrumb.length > 0 && (
           <>
@@ -143,7 +140,7 @@ export function TopNav({ breadcrumb, onHome }: { breadcrumb?: Crumb[]; onHome?: 
       {/* Right: help, notifications, app-switcher, user block (image 1 set) */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <HeaderIconBtn><span style={{ fontSize: 17, fontWeight: 700 }}>?</span></HeaderIconBtn>
-        <HeaderIconBtn dot><span style={{ fontSize: 17 }}>🔔</span></HeaderIconBtn>
+        <HeaderIconBtn dot><Icon name="bell" size={18} /></HeaderIconBtn>
         {/* App-switcher grid */}
         <HeaderIconBtn>
           <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 4px)", gap: 2.5 }}>
