@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Btn } from "./primitives";
+import { Icon, IconName } from "./icons";
 import { PagePreview } from "./page-preview";
 import {
   WizardData, DEFAULT_WIZARD, PageType, getStepsForType,
@@ -10,15 +11,15 @@ import {
   validateWizard, ValidationError,
 } from "./wizard-steps";
 
-const PAGE_TYPES: { key: PageType; icon: string; title: string; tagline: string; desc: string; color: string }[] = [
+const PAGE_TYPES: { key: PageType; icon: IconName; title: string; tagline: string; desc: string; color: string }[] = [
   {
-    key: "page", icon: "📄", title: "Standard Page",
+    key: "page", icon: "page", title: "Standard Page",
     tagline: "Accept payments via a shareable link",
     desc: "One flow that adapts to what you're charging for — products, services, donations, events, fees. The page builds itself around your pricing choice.",
     color: "#1c5af4",
   },
   {
-    key: "invoice", icon: "📃", title: "Invoice",
+    key: "invoice", icon: "invoice", title: "Invoice",
     tagline: "Bill a specific client",
     desc: "Tax-compliant invoice with line items, due date, and customer billing details. Best when you already know who you're billing.",
     color: "#7c3aed",
@@ -59,10 +60,10 @@ function TypeOption({ pt, selected, onClick }: { pt: typeof PAGE_TYPES[number]; 
         width: 52, height: 52, borderRadius: radius.md,
         background: active ? pt.color : C.bg,
         display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: 18, transition: "all 0.2s", fontSize: 24,
-        filter: active ? "brightness(1.1)" : "none",
+        marginBottom: 18, transition: "all 0.2s",
+        color: active ? "#fff" : pt.color,
       }}>
-        <span style={{ filter: active ? "grayscale(0)" : "grayscale(0)" }}>{pt.icon}</span>
+        <Icon name={pt.icon} size={26} />
       </div>
       <p style={{ fontSize: 18, fontWeight: 700, color: active ? pt.color : C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>{pt.title}</p>
       <p style={{ fontSize: 13, fontWeight: 600, color: active ? pt.color : C.textMuted, margin: "0 0 12px" }}>{pt.tagline}</p>
@@ -101,7 +102,7 @@ function WizardStepper({
       {/* Context — what's being created */}
       <span style={{ fontSize: 12, color: C.textMuted, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.05em" }}>Creating</span>
-        <span style={{ fontWeight: 700, color: meta.color }}>{meta.icon} {meta.title}</span>
+        <span style={{ fontWeight: 700, color: meta.color, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name={meta.icon} size={15} /> {meta.title}</span>
       </span>
 
       <div style={{ height: 18, width: 1, background: C.border, flexShrink: 0 }} />
@@ -111,14 +112,15 @@ function WizardStepper({
         {steps.map((s, i) => {
           const done = i < currentStep;
           const active = currentStep === i;
-          // Clickable: any visited step (back) or exactly one ahead. Further stays locked.
-          const clickable = i <= currentStep + 1;
+          // Clickable: the current step or any visited (earlier) step. Forward
+          // steps are locked — you advance only via the Continue button.
+          const clickable = i <= currentStep;
           return (
             <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div
                 onClick={() => clickable && onJump(i)}
                 role={clickable ? "button" : undefined}
-                title={clickable ? undefined : "Complete the earlier steps first"}
+                title={clickable ? undefined : "Use Continue to move forward"}
                 style={{
                   display: "flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: radius.md,
                   background: active ? C.blue : "transparent", whiteSpace: "nowrap", transition: "background 0.15s",
@@ -167,8 +169,8 @@ function PreviewPane({ data, device, onDeviceChange }: {
         </div>
         <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: radius.md, padding: 3 }}>
           {([
-            { k: "desktop", label: "Desktop", icon: "🖥" },
-            { k: "mobile", label: "Mobile", icon: "📱" },
+            { k: "desktop", label: "Desktop", icon: "monitor" as IconName },
+            { k: "mobile", label: "Mobile", icon: "smartphone" as IconName },
           ] as const).map(({ k, label, icon }) => (
             <button key={k} onClick={() => onDeviceChange(k)}
               style={{
@@ -179,7 +181,7 @@ function PreviewPane({ data, device, onDeviceChange }: {
                 fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5,
                 transition: "all 0.15s",
               }}>
-              <span style={{ fontSize: 12 }}>{icon}</span>{label}
+              <Icon name={icon} size={14} />{label}
             </button>
           ))}
         </div>
@@ -255,7 +257,7 @@ function SuccessScreen({ data, onDone }: { data: WizardData; onDone: () => void 
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, width: "100%", maxWidth: 500, marginBottom: 32 }}>
         {[
-          { id: "qr" as const, icon: "▦", label: "Get QR Code", desc: "Print or share" },
+          { id: "qr" as const, icon: <Icon name="qr" size={18} />, label: "Get QR Code", desc: "Print or share" },
           { id: "email" as const, icon: "@", label: "Send via Email", desc: "Direct to customers" },
           { id: "analytics" as const, icon: "↗", label: "View Analytics", desc: "Track performance" },
         ].map(item => (
@@ -328,13 +330,13 @@ function SuccessScreen({ data, onDone }: { data: WizardData; onDone: () => void 
                 <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 20px" }}>Performance snapshot for this payment page since it went live.</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
                   {[
-                    { label: "Total Views", value: "0", icon: "👁" },
+                    { label: "Total Views", value: "0", icon: <Icon name="eye" size={18} /> },
                     { label: "Payments Made", value: "0", icon: "✓" },
                     { label: "Conversion Rate", value: "—", icon: "%" },
                     { label: "Revenue Collected", value: "₹0", icon: "₹" },
                   ].map(stat => (
                     <div key={stat.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.md, padding: "12px 14px" }}>
-                      <p style={{ fontSize: 18, margin: "0 0 2px" }}>{stat.icon}</p>
+                      <p style={{ fontSize: 18, margin: "0 0 2px", color: C.textMuted, display: "flex", alignItems: "center", minHeight: 22 }}>{stat.icon}</p>
                       <p style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: "0 0 2px" }}>{stat.value}</p>
                       <p style={{ fontSize: 11, color: C.textMuted, margin: 0 }}>{stat.label}</p>
                     </div>
@@ -437,9 +439,9 @@ export function Wizard({
     setPhase("type-select");
   };
 
-  // Pills: jump back to any visited step, or one step ahead. Two-or-more ahead stays locked.
+  // Pills: jump back to the current step or any visited step. Forward is locked.
   const jumpTo = (i: number) => {
-    if (i <= currentStep + 1 && i >= 0 && i < totalSteps) setCurrentStep(i);
+    if (i <= currentStep && i >= 0 && i < totalSteps) setCurrentStep(i);
   };
 
   // Render step 1 based on type
