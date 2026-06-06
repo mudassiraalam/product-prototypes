@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Icon, EnkashLogo } from "./icons";
+import { adaptBrandColor, rgbString } from "./color-utils";
 import type { WizardData, PaymentMethod } from "./wizard-steps";
 import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
 
@@ -463,10 +464,14 @@ function BillingPanel({
   const fieldSurface = dark ? "rgba(255,255,255,0.05)" : "#ffffff";
   const fieldBorder = dark ? "rgba(255,255,255,0.14)" : "#d6dbe5";
 
-  // Subtle raised surface for the Total box — faint brand-neutral tint → white.
-  const summaryGradient = dark
-    ? "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))"
-    : "linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%)";
+  // Total box now carries the brand: a faint wash of the brand colour, with the
+  // amount in the brand colour itself — auto-lightened/darkened just enough to
+  // stay legible on the chosen theme (no-op for colours that already read well).
+  const brandSurface = dark ? "#1a2540" : "#f7f7f9";
+  const amountColor = adaptBrandColor(data.brandColor, brandSurface, !!dark);
+  const brandRgb = rgbString(data.brandColor);
+  const totalBoxBg = `rgba(${brandRgb}, ${dark ? 0.14 : 0.07})`;
+  const totalBoxBorder = `rgba(${brandRgb}, ${dark ? 0.42 : 0.30})`;
 
   // Enabled payment methods (merchant-configurable); fall back to all four.
   const methods = (data.paymentMethods && data.paymentMethods.length ? data.paymentMethods : ALL_PAYMENT_METHODS.map(m => m.key));
@@ -500,12 +505,12 @@ function BillingPanel({
       {/* ── Total card (gradient elevation surface) ── */}
       <div style={{ marginBottom: 4 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Total</p>
-        <div style={{ background: summaryGradient, border: `1px solid ${border}`, borderRadius: radius.md, padding: "14px 16px", boxShadow: dark ? "none" : "0 1px 2px rgba(16,24,40,0.04)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 12, color: textMuted }}>
+        <div style={{ background: totalBoxBg, border: `1px solid ${totalBoxBorder}`, borderRadius: radius.md, padding: "14px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
+            <span style={{ fontSize: 12, color: textMuted, paddingBottom: 3 }}>
               {isInvoice ? "Total due" : isDonationFlow ? "Your donation" : "Total payable"}
             </span>
-            <span style={{ fontSize: 22, fontWeight: 800, color: text }}>{total}</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: amountColor, lineHeight: 1 }}>{total}</span>
           </div>
           {isInvoice && parseFloat(data.taxPercent || "0") > 0 && (
             <p style={{ fontSize: 11, color: textFaint, margin: "4px 0 0" }}>Incl. {data.taxPercent}% tax</p>
