@@ -25,6 +25,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { key: "payment-links", icon: "link", label: "Payment Links" },
       { key: "payment-pages", icon: "page", label: "Payment Pages" },
+      { key: "payment-qr", icon: "qr", label: "Payment QR" },
     ],
   },
   {
@@ -36,7 +37,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+function NavRow({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: (key: string) => void }) {
   return (
     <div style={{ position: "relative", margin: "1px 10px" }}>
       {/* Solid left accent bar on the active item (matches image 1) */}
@@ -50,6 +51,7 @@ function NavRow({ item, active }: { item: NavItem; active: boolean }) {
         color: active ? C.blue : C.textSecondary,
         fontWeight: active ? 700 : 500,
       }}
+        onClick={() => onNavigate?.(item.key)}
         onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.bg; }}
         onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}>
         <span style={{ width: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={item.icon} size={17} /></span>
@@ -59,20 +61,20 @@ function NavRow({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function AppSidebar({ active }: { active: string }) {
+export function AppSidebar({ active, onNavigate }: { active: string; onNavigate?: (key: string) => void }) {
   // In image 1 the top "Payment Gateway" item is the active (blue) one. Here the
   // prototype's active screen is Payment Pages, so we light that one instead —
   // but the structure (top item, then the three labelled groups) is identical.
   return (
     <div style={{ width: 232, background: C.white, borderRight: `1px solid ${C.border}`, padding: "16px 0", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
       {/* Top product item */}
-      <NavRow item={NAV_TOP} active={NAV_TOP.key === active} />
+      <NavRow item={NAV_TOP} active={NAV_TOP.key === active} onNavigate={onNavigate} />
 
       {NAV_GROUPS.map(group => (
         <div key={group.label}>
           <p style={{ fontSize: 10.5, fontWeight: 700, color: C.textFaint, letterSpacing: "0.09em", textTransform: "uppercase", margin: "16px 0 6px", padding: "0 20px" }}>{group.label}</p>
           {group.items.map(item => (
-            <NavRow key={item.key} item={item} active={item.key === active} />
+            <NavRow key={item.key} item={item} active={item.key === active} onNavigate={onNavigate} />
           ))}
         </div>
       ))}
