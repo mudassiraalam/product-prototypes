@@ -20,7 +20,7 @@ export type IconName =
   | "search" | "download" | "copy" | "archive" | "ban" | "checkCircle" | "refresh" | "expand" | "redirect" | "qr"
   | "monitor" | "smartphone"
   // preview info / contact
-  | "lock" | "calendar" | "mapPin" | "mail" | "phone" | "clock" | "user" | "globe" | "eye"
+  | "lock" | "calendar" | "mapPin" | "mail" | "phone" | "clock" | "user" | "globe" | "eye" | "bulb"
   // brand / social
   | "whatsapp" | "facebook" | "x";
 
@@ -28,7 +28,7 @@ const STROKE: IconName[] = [
   "gateway", "link", "page", "summary", "settings", "ledger", "settlements", "bell", "home",
   "invoice", "donation", "ticket", "bag", "coins", "card", "receipt", "handshake",
   "search", "download", "copy", "archive", "ban", "checkCircle", "refresh", "expand", "redirect", "qr",
-  "monitor", "smartphone", "lock", "calendar", "mapPin", "mail", "phone", "clock", "user", "globe", "eye",
+  "monitor", "smartphone", "lock", "calendar", "mapPin", "mail", "phone", "clock", "user", "globe", "eye", "bulb",
 ];
 
 // Path/children for each icon, drawn on a 24×24 grid.
@@ -74,6 +74,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   user: (<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>),
   globe: (<><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" /></>),
   eye: (<><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></>),
+  bulb: (<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3z" /></>),
 
   // Brand glyphs (filled).
   whatsapp: (<path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.6 4.7-1.2A10 10 0 1 0 12 2zm5.5 13.9c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.7-1.2-4.4-3.9-4.6-4.1-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2.1.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4 0 .5l-.4.5c-.2.2-.3.4-.1.6.2.3.8 1.3 1.7 2 .9.6 1.3.8 1.6.9.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.2.1.6-.1 1.1z" />),
