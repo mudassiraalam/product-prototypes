@@ -2,6 +2,8 @@
 import { useRef, useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Inp, Textarea, Sel, Toggle, ColorPicker, SegmentedControl, InfoBanner, SectionCard, Label, Btn } from "./primitives";
+import { Icon } from "./icons";
+import { brandClashes, suggestedShade } from "./color-utils";
 
 export type PageType = "page" | "invoice";
 
@@ -1097,6 +1099,14 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
 export function StepCustomization({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   const presets = ["#1c5af4", "#0891b2", "#16a34a", "#ea580c", "#dc2626", "#7c3aed", "#0f172a"];
 
+  // Contrast hint — fires only when the brand colour is genuinely too close to
+  // the selected theme to read. Dismissal is keyed to colour+theme, so changing
+  // either brings the hint back if the new pairing also clashes.
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const clashKey = `${data.brandColor}|${data.theme}`;
+  const showColorHint = brandClashes(data.brandColor, data.theme) && dismissed !== clashKey;
+  const themeWord = data.theme === "light" ? "light" : "dark";
+
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Customize Look & Feel</h2>
@@ -1115,6 +1125,29 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
           ))}
         </div>
         <ColorPicker label="Custom Color" value={data.brandColor} onChange={v => setData({ ...data, brandColor: v })} />
+        {showColorHint && (
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 12, padding: "11px 13px", background: "#fef6e7", border: "1px solid #f3d699", borderRadius: radius.md }}>
+            <span style={{ color: "#b45309", flexShrink: 0, marginTop: 1 }}><Icon name="bulb" size={17} /></span>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 12.5, color: "#92591a", lineHeight: 1.5, margin: "0 0 10px" }}>
+                This shade is very close to the {themeWord} theme you've selected, so your price and buttons may be hard for customers to see.
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <button
+                  onClick={() => setData({ ...data, brandColor: suggestedShade(data.brandColor, data.theme) })}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#b45309", color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  <span style={{ width: 13, height: 13, borderRadius: 3, background: suggestedShade(data.brandColor, data.theme), display: "inline-block" }} />
+                  Use a brighter shade
+                </button>
+                <button
+                  onClick={() => setDismissed(clashKey)}
+                  style={{ background: "transparent", color: "#92591a", border: "1px solid #e3c178", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  Keep it anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div style={{ marginTop: 14, marginBottom: 4 }}>
           <Inp
             label="Merchant / Business Name"
