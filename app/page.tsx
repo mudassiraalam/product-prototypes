@@ -11,10 +11,13 @@ import { PaymentPage, INITIAL_PAGES, PageStatus } from "@/components/payment-pag
 import { WizardData, DEFAULT_WIZARD } from "@/components/payment-pages/wizard-steps";
 import { pageToWizardData, wizardDataToPage } from "@/components/payment-pages/page-mappers";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { QrApp } from "@/components/payment-qr/qr-app";
 
 type Screen = "dashboard" | "wizard" | "detail";
+type Product = "pages" | "qr";
 
 export default function Home() {
+  const [product, setProduct] = useState<Product>("pages");
   const [pages, setPages] = useState<PaymentPage[]>(INITIAL_PAGES);
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [selectedPage, setSelectedPage] = useState<PaymentPage | null>(null);
@@ -120,12 +123,14 @@ export default function Home() {
 
   // Restore from URL on first load.
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("product") === "qr") { setProduct("qr"); return; }
     applyUrl(window.location.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Push a new history entry whenever the section changes (skip during restore).
   useEffect(() => {
+    if (product !== "pages") return;
     if (suppressPush.current) return;
     const q = currentQuery();
     if (window.location.search !== q) {
@@ -136,11 +141,27 @@ export default function Home() {
 
   // Back / forward.
   useEffect(() => {
-    const onPop = () => applyUrl(window.location.search);
+    const onPop = () => {
+      if (new URLSearchParams(window.location.search).get("product") === "qr") { setProduct("qr"); return; }
+      setProduct("pages");
+      applyUrl(window.location.search);
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages]);
+
+  // Switch between sibling products (Payment Pages ↔ Payment QR) from the sidebar.
+  const navigateProduct = (key: string) => {
+    if (key === "payment-qr") {
+      setProduct("qr");
+      window.history.pushState({}, "", window.location.pathname + "?product=qr");
+    } else if (key === "payment-pages") {
+      setProduct("pages");
+      exitToDashboard();
+      window.history.pushState({}, "", window.location.pathname);
+    }
+  };
 
   // ── Mobile guard ───────────────────────────────────────────────────────────
   // The merchant dashboard/builder is a desktop workflow (built with fixed-width
@@ -148,6 +169,7 @@ export default function Home() {
   // small screens. The *customer* payment page is fully mobile-optimised and is
   // demonstrable via the builder's device toggle.
   const isMobile = useIsMobile();
+  if (product === "qr") return <QrApp onNavigateProduct={navigateProduct} />;
   if (isMobile) return <MobileGuard />;
 
   return (
@@ -159,7 +181,7 @@ export default function Home() {
         : undefined
       } />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {screen !== "wizard" && <AppSidebar active="payment-pages" />}
+        {screen !== "wizard" && <AppSidebar active="payment-pages" onNavigate={navigateProduct} />}
 
         {screen === "dashboard" && (
           <Dashboard
