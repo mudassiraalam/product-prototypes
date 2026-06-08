@@ -95,15 +95,27 @@ export const INITIAL_QRS: QrCode[] = [
 
 // ── Dashboard headline metrics — every number is one a PSP actually reports ───
 // (No "scans" or "scan→pay": a printed QR cannot report a scan back to anyone.)
+// Mirrors the Payment Pages dashboard exactly: 2 graph metrics (Collected,
+// Failed) + 2 breakdown metrics (Total codes by status, Successful payments).
+// Failed is a "bad" metric, so its trend DESCENDS and the delta is negative —
+// the card flips the colour to green (a falling failure count is good news),
+// identical to the Pages treatment.
 export const QR_DASHBOARD_METRICS = {
   totalCodes: 5,
   statusCounts: { active: 2, draft: 1, inactive: 1, expired: 1 },
+
   totalCollected: "₹11.9L",
-  collectedTrend: [620, 710, 690, 880, 910, 1020, 1180],
+  collectedTrend: [28, 22, 40, 32, 50, 42, 60],
+  collectedDeltaPct: 18,
+
   successfulPayments: 9819,
   successRate: 93,
+  successThisWeek: 1204,
+  avgPayment: "₹121",
+
   failedAttempts: 712,
-  failedTrend: [58, 71, 49, 95, 88, 110, 132],
+  failedTrend: [56, 48, 51, 40, 36, 31, 24],
+  failedDeltaPct: -4,
 } as const;
 
 // ── Recent payments — what really settles back: masked payer VPA + UTR ────────
