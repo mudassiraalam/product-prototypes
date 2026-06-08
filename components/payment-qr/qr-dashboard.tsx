@@ -76,7 +76,7 @@ type BreakdownRow = { label: string; value: string; dot?: string };
 function StatCard(props: {
   label: string; value: string; accent: string; tip: string; variant: "graph" | "breakdown";
   trend?: readonly number[]; trendStroke?: string; trendFill?: string;
-  deltaPct?: number; deltaPositive?: boolean; rows?: BreakdownRow[];
+  deltaPct?: number; deltaPositive?: boolean; rows?: BreakdownRow[]; footer?: React.ReactNode;
 }) {
   const { label, value, accent, variant, tip } = props;
   return (
@@ -91,7 +91,9 @@ function StatCard(props: {
         {variant === "graph" && (
           <div style={{ marginTop: "auto" }}>
             <Sparkline data={props.trend!} stroke={props.trendStroke!} fill={props.trendFill!} />
-            <div style={{ marginTop: 8 }}><DeltaChip deltaPct={props.deltaPct!} positive={props.deltaPositive!} /></div>
+            <div style={{ marginTop: 8 }}>
+              {props.footer ?? <DeltaChip deltaPct={props.deltaPct!} positive={props.deltaPositive!} />}
+            </div>
           </div>
         )}
         {variant === "breakdown" && (
@@ -215,13 +217,15 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
           tip="Total money successfully collected across all your QR codes."
           trend={m.collectedTrend} trendStroke={C.blue} trendFill={C.blueLight}
           deltaPct={m.collectedDeltaPct} deltaPositive={m.collectedDeltaPct >= 0} />
-        <StatCard label="Successful Payments" value={m.successfulPayments.toLocaleString("en-IN")} accent={C.green} variant="breakdown"
+        <StatCard label="Successful Payments" value={m.successfulPayments.toLocaleString("en-IN")} accent={C.green} variant="graph"
           tip="Payments that went through across all your QR codes."
-          rows={[
-            { label: "Success rate", value: `${m.successRate}%` },
-            { label: "This week", value: m.successThisWeek.toLocaleString("en-IN") },
-            { label: "Avg payment", value: m.avgPayment },
-          ]} />
+          trend={m.successTrend} trendStroke={C.green} trendFill={C.greenBg}
+          footer={
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", background: C.greenBg, color: C.green, fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: radius.sm }}>{m.successRate}% success</span>
+              <span style={{ fontSize: 10.5, color: C.textFaint }}>of all attempts</span>
+            </div>
+          } />
         <StatCard label="Failed" value={m.failedAttempts.toLocaleString("en-IN")} accent={C.red} variant="graph"
           tip="Payment attempts that didn't complete. A falling trend is good — shown in green."
           trend={m.failedTrend} trendStroke={C.red} trendFill={C.redBg}
