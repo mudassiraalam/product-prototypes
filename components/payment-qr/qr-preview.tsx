@@ -56,7 +56,7 @@ export function Standee({ data, surface = "#e9ecf3" }: { data: QrData; surface?:
   const dash = dark ? "#334155" : "#cbd2e0";
   const ticket = data.frameStyle === "ticket";
   const topRadius = data.frameStyle === "sharp" ? 3 : 18;
-  const items = data.priceListEnabled ? data.priceList.filter(i => i.label) : [];
+  const items = (data.amountMode === "any" && data.priceListEnabled) ? data.priceList.filter(i => i.label) : [];
 
   const body = (
     <div style={{ background: cardBg, padding: "24px 24px 22px", display: "flex", flexDirection: "column", alignItems: "center",
