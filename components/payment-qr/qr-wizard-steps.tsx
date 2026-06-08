@@ -92,7 +92,6 @@ export function getQrSteps(): { key: string; label: string }[] {
   return [
     { key: "setup", label: "QR Setup" },
     { key: "design", label: "Design" },
-    { key: "availability", label: "Availability" },
   ];
 }
 
@@ -106,10 +105,10 @@ export function validateQr(data: QrData): QrValidationError[] {
     e.push({ step: 0, message: "Set a fixed amount greater than zero." });
   }
   if (data.usage === "reusable" && data.endDateEnabled && !data.endDate) {
-    e.push({ step: 2, message: "Pick an end date, or turn the end date off." });
+    e.push({ step: 0, message: "Pick an end date, or turn the end date off." });
   }
   if (data.usage === "reusable" && data.capEnabled && !(parseInt(data.capCount || "0") > 0)) {
-    e.push({ step: 2, message: "Enter how many payments to allow, or turn the cap off." });
+    e.push({ step: 0, message: "Enter how many payments to allow, or turn the cap off." });
   }
   return e;
 }
@@ -219,10 +218,50 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
         <SectionCard title="Amount">
           <InfoBanner type="info">
             No amount is set here — the cashier enters it for each bill on the billing screen, then generates the code.
-            You'll set the validity timer in the next-but-one step.
+            Set how long each generated code stays valid below.
           </InfoBanner>
         </SectionCard>
       )}
+
+      {data.usage === "reusable" ? (
+        <>
+          <SectionCard title="End date">
+            <Toggle checked={data.endDateEnabled} onChange={v => set({ endDateEnabled: v })}
+              label="Stop accepting payments after a date"
+              desc="Good for events or seasonal stalls. Leave off for a permanent counter QR that never expires." />
+            {data.endDateEnabled && (
+              <Inp label="Active until" type="date" value={data.endDate} onChange={v => set({ endDate: v })} />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Payment limit">
+            <Toggle checked={data.capEnabled} onChange={v => set({ capEnabled: v })}
+              label="Close after a set number of payments"
+              desc="e.g. 100 entry passes, then the QR stops accepting payments." />
+            {data.capEnabled && (
+              <Inp label="Maximum payments" type="number" value={data.capCount}
+                onChange={v => set({ capCount: v })} placeholder="100" />
+            )}
+          </SectionCard>
+        </>
+      ) : (
+        <SectionCard title="Per-bill timer">
+          <Label>Each generated code is valid for</Label>
+          <SegmentedControl value={data.timerMinutes} onChange={v => set({ timerMinutes: v })}
+            options={[{ key: "5", label: "5 min" }, { key: "15", label: "15 min" }, { key: "30", label: "30 min" }]} />
+          <div style={{ marginTop: 14 }}>
+            <InfoBanner type="info">
+              The code closes the moment it's paid, or when the timer runs out — whichever comes first. The cashier then
+              generates a fresh one for the next customer.
+            </InfoBanner>
+          </div>
+        </SectionCard>
+      )}
+
+      <p style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.6, margin: "2px 4px 14px" }}>
+        You can also <strong>deactivate</strong> any QR instantly from the dashboard. Payments made to a closed QR are
+        auto-refunded to the customer.
+      </p>
 
       <SectionCard title="What it says">
         <Inp label="Headline on the code" value={data.headline} onChange={v => set({ headline: v })}
@@ -271,57 +310,6 @@ export function StepQrDesign({ data, setData }: { data: QrData; setData: (d: QrD
           </p>
         </SectionCard>
       )}
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// STEP 3 — Availability
-// ══════════════════════════════════════════════════════════════════════════════
-export function StepQrAvailability({ data, setData }: { data: QrData; setData: (d: QrData) => void }) {
-  const set = (patch: Partial<QrData>) => setData({ ...data, ...patch });
-
-  return (
-    <div>
-      {data.usage === "reusable" ? (
-        <>
-          <SectionCard title="End date">
-            <Toggle checked={data.endDateEnabled} onChange={v => set({ endDateEnabled: v })}
-              label="Stop accepting payments after a date"
-              desc="Good for events or seasonal stalls. Leave off for a permanent counter QR that never expires." />
-            {data.endDateEnabled && (
-              <Inp label="Active until" type="date" value={data.endDate} onChange={v => set({ endDate: v })} />
-            )}
-          </SectionCard>
-
-          <SectionCard title="Payment limit">
-            <Toggle checked={data.capEnabled} onChange={v => set({ capEnabled: v })}
-              label="Close after a set number of payments"
-              desc="e.g. 100 entry passes, then the QR stops accepting payments." />
-            {data.capEnabled && (
-              <Inp label="Maximum payments" type="number" value={data.capCount}
-                onChange={v => set({ capCount: v })} placeholder="100" />
-            )}
-          </SectionCard>
-        </>
-      ) : (
-        <SectionCard title="Per-bill timer">
-          <Label>Each generated code is valid for</Label>
-          <SegmentedControl value={data.timerMinutes} onChange={v => set({ timerMinutes: v })}
-            options={[{ key: "5", label: "5 min" }, { key: "15", label: "15 min" }, { key: "30", label: "30 min" }]} />
-          <div style={{ marginTop: 14 }}>
-            <InfoBanner type="info">
-              The code closes the moment it's paid, or when the timer runs out — whichever comes first. The cashier then
-              generates a fresh one for the next customer.
-            </InfoBanner>
-          </div>
-        </SectionCard>
-      )}
-
-      <p style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.6, margin: "2px 4px" }}>
-        You can also <strong>deactivate</strong> any QR instantly from the dashboard. Payments made to a closed QR are
-        auto-refunded to the customer.
-      </p>
     </div>
   );
 }
