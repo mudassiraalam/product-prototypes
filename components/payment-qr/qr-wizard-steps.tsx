@@ -7,13 +7,13 @@ import {
 // ──────────────────────────────────────────────────────────────────────────────
 // Payment QR — builder data model (v2).
 //
-// Grounded in how Razorpay / Cashfree actually model UPI QR:
-//   AMOUNT  any  → static QR, customer types amount
+// How a UPI QR behaves, in plain terms:
+//   AMOUNT  any  → no amount in the code, customer types it
 //           fixed→ amount baked into the code
-//   USAGE   reusable → one printed code, many payments, never auto-expires
-//                      (Razorpay multiple_use). Optional end-date + payment cap.
+//   USAGE   reusable → one printed code, many payments, never auto-expires.
+//                      Optional end-date + payment cap.
 //           onetime  → fresh code per sale on a billing SCREEN, short timer,
-//                      closes on payment or timeout (Razorpay single_use+close_by).
+//                      closes on payment or timeout.
 //
 // "Menu" and "What to collect" were removed: a plain UPI QR cannot show a merchant
 // item list or capture custom fields — that all happens inside the customer's UPI
@@ -155,17 +155,17 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
       <SectionCard title="How will this QR be used?">
         <div style={{ marginBottom: 14 }}>
           <SegmentedControl value={data.usage} onChange={v => set({ usage: v as Usage })}
-            options={[{ key: "reusable", label: "Reusable" }, { key: "onetime", label: "One-time (per bill)" }]} />
+            options={[{ key: "reusable", label: "Multiple Use" }, { key: "onetime", label: "One-time (per bill)" }]} />
         </div>
         {data.usage === "reusable" ? (
           <InfoBanner type="info">
-            One <strong>printed</strong> code that lives on your counter and takes many payments. Never expires until you
-            close it. <em>(Razorpay calls this multiple-use.)</em>
+            One <strong>printed</strong> code that lives on your counter and takes many payments. It stays active until you
+            close it.
           </InfoBanner>
         ) : (
           <InfoBanner type="info">
-            A fresh code is shown on a <strong>screen</strong> for each sale, with a short timer, and closes once paid or
-            when it times out. The cashier sets the amount per bill. <em>(Razorpay calls this single-use.)</em>
+            A fresh code is shown on a <strong>screen</strong> for each sale, with a short timer, and closes once it's paid or
+            when it times out. The cashier sets the amount per bill.
           </InfoBanner>
         )}
       </SectionCard>
@@ -173,7 +173,8 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
       {data.usage === "reusable" && (
         <SectionCard title="What amount does it take?">
           <div style={{ marginBottom: 14 }}>
-            <SegmentedControl value={data.amountMode} onChange={v => set({ amountMode: v as AmountMode })}
+            <SegmentedControl value={data.amountMode}
+              onChange={v => set(v === "fixed" ? { amountMode: "fixed", priceListEnabled: false } : { amountMode: "any" })}
               options={[{ key: "any", label: "Any amount" }, { key: "fixed", label: "Fixed price" }]} />
           </div>
 
@@ -182,15 +183,15 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
               <Inp label="Amount" required type="number" value={data.fixedAmount}
                 onChange={v => set({ fixedAmount: v })} prefix="₹" placeholder="499" />
               <InfoBanner type="info">
-                A <strong>dynamic</strong> QR — the amount is baked in, so the customer just scans and confirms. Good for a
-                fixed entry fee or product price.
+                The amount is set into the code, so the customer just scans and confirms. Good for a fixed entry fee or
+                product price.
               </InfoBanner>
             </>
           ) : (
             <>
               <InfoBanner type="info">
-                A <strong>static</strong> QR — one reusable code with no amount. The customer types how much they're paying.
-                Perfect for a counter sticker.
+                One reusable code with no set amount — the customer types how much they're paying. Perfect for a counter
+                sticker.
               </InfoBanner>
               <div style={{ marginTop: 14 }}>
                 <Toggle checked={data.priceListEnabled} onChange={v => set({ priceListEnabled: v })}
@@ -296,7 +297,7 @@ export function StepQrAvailability({ data, setData }: { data: QrData; setData: (
           <SectionCard title="Payment limit">
             <Toggle checked={data.capEnabled} onChange={v => set({ capEnabled: v })}
               label="Close after a set number of payments"
-              desc="e.g. 100 entry passes, then the QR stops. (An EnKash extra — Razorpay natively only does single-use or unlimited.)" />
+              desc="e.g. 100 entry passes, then the QR stops accepting payments." />
             {data.capEnabled && (
               <Inp label="Maximum payments" type="number" value={data.capCount}
                 onChange={v => set({ capCount: v })} placeholder="100" />
@@ -311,7 +312,7 @@ export function StepQrAvailability({ data, setData }: { data: QrData; setData: (
           <div style={{ marginTop: 14 }}>
             <InfoBanner type="info">
               The code closes the moment it's paid, or when the timer runs out — whichever comes first. The cashier then
-              generates a fresh one for the next customer. (Within Razorpay's 2-min–2-hr window.)
+              generates a fresh one for the next customer.
             </InfoBanner>
           </div>
         </SectionCard>
