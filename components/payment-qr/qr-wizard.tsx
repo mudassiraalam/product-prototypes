@@ -5,7 +5,7 @@ import { Icon, IconName } from "@/components/payment-pages/icons";
 import { Btn } from "@/components/payment-pages/primitives";
 import {
   QrData, DEFAULT_QR, getQrSteps, validateQr, QrValidationError,
-  StepQrSetup, StepQrDesign, StepQrAvailability,
+  StepQrSetup, StepQrDesign,
 } from "./qr-wizard-steps";
 import { QrPreview, PreviewDevice } from "./qr-preview";
 import { upiString, downloadQrPng } from "./qr-mock-data";
@@ -95,7 +95,7 @@ export function QrWizard({
   onSyncState?: (data: QrData, step: number, building: boolean) => void;
 }) {
   const [data, setData] = useState<QrData>(initialData);
-  const [currentStep, setCurrentStep] = useState(initialStep);
+  const [currentStep, setCurrentStep] = useState(Math.min(initialStep, getQrSteps().length - 1));
   const [device, setDevice] = useState<PreviewDevice>(primaryDevice(initialData));
   const [phase, setPhase] = useState<"wizard" | "success">("wizard");
   const [errors, setErrors] = useState<QrValidationError[]>([]);
@@ -123,7 +123,6 @@ export function QrWizard({
   const stepComponents = [
     <StepQrSetup key="setup" data={data} setData={setData} />,
     <StepQrDesign key="design" data={data} setData={setData} />,
-    <StepQrAvailability key="availability" data={data} setData={setData} />,
   ];
 
   return (
