@@ -151,10 +151,25 @@ export function Standee({ data }: { data: QrData }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME COLLECT — a single payment, amount baked in, validity-limited.
-// Closes on payment or expiry. Shown on a screen / shared, never printed.
+// ONE-TIME COLLECT — the payer-facing collect screen (shown on a device or
+// opened from a shared link). Composed per the addendum's Dynamic QR spec:
+// QR block · BHIM|UPI lockup · "Merchant Name | UPI ID" line · "Scan & Pay
+// with any UPI app" · partner (EnKash) logo. Issuance date + "Pay with Credit
+// on UPI" callout: [VERIFY for on-screen dynamic QRs].
+// Status-aware: live (countdown) · collected (closed after payment) · expired.
 // ══════════════════════════════════════════════════════════════════════════════
-export function OneTimeCollect({ data }: { data: QrData }) {
+export type CollectMode = "live" | "collected" | "expired";
+
+function Monogram({ name, accent }: { name: string; accent: string }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join("") || "M";
+  return (
+    <span style={{ width: 34, height: 34, borderRadius: 9, background: accent, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0, letterSpacing: "0.02em" }}>
+      {initials}
+    </span>
+  );
+}
+
+export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: CollectMode }) {
   const totalSecs = validityMinutes(data) * 60;
   const [secs, setSecs] = useState(totalSecs);
   const [ref, setRef] = useState(() => genQrRef());
@@ -162,70 +177,108 @@ export function OneTimeCollect({ data }: { data: QrData }) {
 
   useEffect(() => { setSecs(totalSecs); }, [totalSecs]);
   useEffect(() => {
+    if (mode !== "live") return;
     timer.current = setInterval(() => setSecs(s => (s > 0 ? s - 1 : 0)), 1000);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, []);
+  }, [mode]);
 
   const fmt = (s: number) => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
     return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`;
   };
-  const expired = secs === 0;
+  const localExpired = mode === "live" && secs === 0;
+  const terminal = mode !== "live" || localExpired;
   const regenerate = () => { setRef(genQrRef()); setSecs(totalSecs); };
   const amount = parseFloat(data.oneTimeAmount || "0");
+  const accent = data.brandColor || "#1c5af4";
   const text = upiString({ vpa: data.vpa, name: data.merchantName, amount: data.oneTimeAmount, ref });
+
+  // theme
+  const dark = data.screenTheme === "dark";
+  const cardBg = dark ? "#10182b" : "#ffffff";
+  const cardBorder = dark ? "rgba(255,255,255,0.10)" : C.border;
+  const tMain = dark ? "#f4f6fb" : C.text;
+  const tSub = dark ? "rgba(244,246,251,0.62)" : C.textMuted;
+  const tFaint = dark ? "rgba(244,246,251,0.45)" : C.textFaint;
+  const panelBg = dark ? "rgba(255,255,255,0.05)" : "#f7f8fa";
+  const panelBorder = dark ? "rgba(255,255,255,0.10)" : C.borderLight;
+
+  const statusBlock = () => {
+    if (mode === "collected") return (
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: C.greenBg, border: `1px solid ${C.green}33`, borderRadius: 10, padding: 10 }}>
+        <Icon name="checkCircle" size={16} color={C.green} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Collected — closed after payment</span>
+      </div>
+    );
+    if (mode === "expired" || localExpired) return (
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: C.redBg, border: `1px solid ${C.redMid}`, borderRadius: 10, padding: 10 }}>
+        <Icon name="clock" size={15} color={C.red} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.red }}>Expired — no payment received</span>
+      </div>
+    );
+    return (
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: dark ? "rgba(255,255,255,0.06)" : `${accent}14`, border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : accent + "44"}`, borderRadius: 10, padding: 9 }}>
+        <Icon name="clock" size={15} color={dark ? "#fff" : accent} />
+        <span style={{ fontSize: 13, color: tSub }}>Valid for</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: secs <= 60 ? C.red : dark ? "#fff" : accent, fontVariantNumeric: "tabular-nums" }}>{fmt(secs)}</span>
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ width: 286, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 18, padding: 18, boxShadow: "0 16px 30px rgba(15,23,42,0.10)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{data.label || "One-time QR"}</span>
-          <span style={{ fontSize: 11, color: C.textFaint, fontFamily: "monospace" }}>ref {ref}</span>
-        </div>
-        <p style={{ fontSize: 12, color: C.textMuted, margin: "0 0 12px" }}>{data.merchantName}</p>
-
-        <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 12 }}>
-          <span style={{ fontSize: 28, fontWeight: 800, color: C.text }}>₹{amount > 0 ? amount.toLocaleString("en-IN") : "—"}</span>
-          <span style={{ fontSize: 11, color: C.textFaint, marginLeft: "auto" }}>pre-filled for the payer</span>
+      <div style={{ width: 292, background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 18, padding: 18, boxShadow: "0 16px 30px rgba(15,23,42,0.14)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          {data.showMerchantLogo && <Monogram name={data.merchantName} accent={accent} />}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ fontSize: 13.5, fontWeight: 800, color: tMain, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName}</p>
+            <p style={{ fontSize: 11.5, color: tSub, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.label || "One-time QR"}</p>
+          </div>
+          <span style={{ fontSize: 10.5, color: tFaint, fontFamily: "monospace", flexShrink: 0 }}>ref {ref}</span>
         </div>
 
-        <div style={{ background: "#f7f8fa", border: `1px solid ${C.borderLight}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: expired ? 0.25 : 1, transition: "opacity 0.2s" }}>
-          <QrSvg text={text} size={150} />
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: C.textSecondary }}>
-            UPI ID: <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{data.vpa}</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
+          <span style={{ fontSize: 28, fontWeight: 800, color: dark ? "#fff" : accent }}>₹{amount > 0 ? amount.toLocaleString("en-IN") : "—"}</span>
+          <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>pre-filled for the payer</span>
+        </div>
+
+        <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: terminal ? 0.3 : 1, transition: "opacity 0.2s" }}>
+          <div style={{ background: "#fff", borderRadius: 8, padding: 6 }}><QrSvg text={text} size={148} /></div>
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: tSub, textAlign: "center" }}>
+            {data.merchantName} | UPI ID: <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{data.vpa}</span>
           </span>
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: C.textSecondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>Scan &amp; Pay with any UPI app</span>
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: tSub, letterSpacing: "0.08em", textTransform: "uppercase" }}>Scan &amp; Pay with any UPI app</span>
         </div>
 
-        <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: expired ? C.redBg : C.blueLight, border: `1px solid ${expired ? C.redMid : C.blueMid}`, borderRadius: 10, padding: 9 }}>
-          <Icon name="clock" size={15} color={expired ? C.red : C.blue} />
-          <span style={{ fontSize: 13, color: C.textSecondary }}>{expired ? "Expired" : "Valid for"}</span>
-          {!expired && (
-            <span style={{ fontSize: 15, fontWeight: 800, color: secs <= 60 ? C.red : C.blue, fontVariantNumeric: "tabular-nums" }}>{fmt(secs)}</span>
-          )}
-        </div>
-        <p style={{ fontSize: 11, color: C.textFaint, textAlign: "center", margin: "9px 0 0", lineHeight: 1.5 }}>
-          Closes after one successful payment, or at expiry — whichever comes first
-        </p>
+        {statusBlock()}
+        {!terminal && (
+          <p style={{ fontSize: 11, color: tFaint, textAlign: "center", margin: "9px 0 0", lineHeight: 1.5 }}>
+            Closes after one successful payment, or at expiry — whichever comes first
+          </p>
+        )}
 
-        {expired && (
-          <button onClick={regenerate} style={{ marginTop: 13, width: "100%", padding: 12, background: C.blue, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        {localExpired && (
+          <button onClick={regenerate} style={{ marginTop: 13, width: "100%", padding: 12, background: accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
             <Icon name="refresh" size={15} color="#fff" /> Generate a fresh code
           </button>
         )}
 
-        <div style={{ marginTop: 13, display: "flex", justifyContent: "center" }}>
-          <BhimUpiLockup height={13} />
+        <div style={{ marginTop: 13, display: "flex", justifyContent: "center", alignItems: "center", gap: 10 }}>
+          <BhimUpiLockup reverse={dark} height={13} />
+          <span style={{ width: 1, height: 13, background: dark ? "rgba(255,255,255,0.35)" : "#cbd2e0" }} />
+          <PartnerLogo reverse={dark} height={11} />
         </div>
       </div>
-      <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>Amount &amp; reference are encoded in the code — try the timer.</p>
+      {mode === "live" && (
+        <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>Amount &amp; reference are encoded in the code — try the timer.</p>
+      )}
     </div>
   );
 }
 
 // ── exported preview switch ───────────────────────────────────────────────────
 export type PreviewDevice = "standee" | "collect";
-export function QrPreview({ data, device }: { data: QrData; device: PreviewDevice }) {
-  if (device === "collect") return <OneTimeCollect data={data} />;
+export function QrPreview({ data, device, collectMode }: { data: QrData; device: PreviewDevice; collectMode?: CollectMode }) {
+  if (device === "collect") return <OneTimeCollect data={data} mode={collectMode} />;
   return <Standee data={data} />;
 }
