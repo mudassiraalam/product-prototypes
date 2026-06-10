@@ -5,7 +5,7 @@ import { Icon } from "@/components/payment-pages/icons";
 import { Btn } from "@/components/payment-pages/primitives";
 import {
   QrData, DEFAULT_QR, getQrSteps, validateQr, QrValidationError,
-  StepQrSetup, StepQrDesign, StepQrCollect,
+  StepQrSetup, StepQrDesign, StepQrCollectDesign,
 } from "./qr-wizard-steps";
 import { QrPreview, PreviewDevice } from "./qr-preview";
 import { upiString, downloadQrPng } from "./qr-mock-data";
@@ -141,7 +141,7 @@ export function QrWizard({
     <StepQrSetup key="setup" data={data} setData={setData} />,
     data.usage === "reusable"
       ? <StepQrDesign key="design" data={data} setData={setData} />
-      : <StepQrCollect key="collect" data={data} setData={setData} />,
+      : <StepQrCollectDesign key="collectDesign" data={data} setData={setData} />,
   ];
 
   return (
