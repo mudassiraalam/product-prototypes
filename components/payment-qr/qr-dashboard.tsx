@@ -130,7 +130,9 @@ function RowKebab({ qr, open, onToggle, onClose, onEdit, onToggleStatus, onDownl
         style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: open ? C.blueLight : C.bg, border: "none", borderRadius: radius.sm, cursor: "pointer", fontSize: 16, color: open ? C.blue : C.textMuted, fontFamily: "inherit" }}>⋮</button>
       {open && (
         <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 184, padding: 6 }}>
-          <div onClick={() => { onEdit(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }} onMouseEnter={hov(true)} onMouseLeave={hov(false)}><Icon name="edit" size={15} /> Edit</div>
+          {qr.origin !== "api" && (
+            <div onClick={() => { onEdit(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }} onMouseEnter={hov(true)} onMouseLeave={hov(false)}><Icon name="edit" size={15} /> Edit</div>
+          )}
           {qr.status !== "Draft" && qr.status !== "Expired" && (
             <div onClick={() => { onToggleStatus(); onClose(); }} style={{ ...itemStyle, color: qr.status === "Active" ? C.red : C.green }}
               onMouseEnter={hov(true, qr.status === "Active" ? C.redBg : C.greenBg)} onMouseLeave={hov(false)}>
@@ -200,7 +202,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, margin: "0 0 4px", letterSpacing: "-0.02em" }}>Payment QR</h1>
-          <p style={{ fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>Create scan-to-pay UPI codes for your counters, events and stalls.</p>
+          <p style={{ fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>Create scan-to-pay UPI codes for your counters and collections — API-minted transaction QRs appear here too.</p>
         </div>
         <Btn onClick={onCreate} size="lg"><Icon name="qr" size={16} color="#fff" /> Create QR</Btn>
       </div>
@@ -275,7 +277,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
               <option value="All">All Types</option>
               <option value="any">Any amount</option>
               <option value="fixed">Fixed price</option>
-              <option value="onetime">Per-bill</option>
+              <option value="onetime">One-time</option>
             </select>
           </div>
           <button style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}><Icon name="download" size={15} /> Export</button>
@@ -318,7 +320,10 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ width: 36, height: 36, borderRadius: radius.md, background: c.brandColor + "18", display: "flex", alignItems: "center", justifyContent: "center", color: c.brandColor, flexShrink: 0 }}><Icon name="qr" size={18} /></div>
                       <div>
-                        <p onClick={() => onView(c)} style={{ fontSize: 14, color: C.blue, fontWeight: 600, cursor: "pointer", margin: "0 0 2px", lineHeight: 1.3 }}>{c.label}</p>
+                        <p onClick={() => onView(c)} style={{ fontSize: 14, color: C.blue, fontWeight: 600, cursor: "pointer", margin: "0 0 2px", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 6 }}>
+                          {c.label}
+                          {c.origin === "api" && <span style={{ fontSize: 9.5, fontWeight: 700, color: C.textMuted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.full, padding: "1px 7px", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>via API</span>}
+                        </p>
                         <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{c.location}</p>
                       </div>
                     </div>
