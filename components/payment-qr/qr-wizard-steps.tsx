@@ -38,6 +38,7 @@ export type AmountMode = "any" | "fixed";
 export type Usage = "reusable" | "onetime";
 export type CardColorMode = "white" | "brand";
 export type LayoutVariant = "bhimTop" | "partnerTop";
+export type ScreenTheme = "light" | "dark";
 
 export interface QrData {
   merchantName: string;     // read-only, from MERCHANT_PROFILE
@@ -51,10 +52,14 @@ export interface QrData {
 
   // standee design (reusable only) — addendum-bounded
   cardColorMode: CardColorMode;
-  brandColor: string;
+  brandColor: string;       // standee card colour / collect-screen accent
   layoutVariant: LayoutVariant;
   showMerchantName: boolean;
   centerLogo: boolean;      // default off — needs NPCI approval
+
+  // collect-screen design (one-time only) — dynamic-QR spec bounded
+  screenTheme: ScreenTheme;
+  showMerchantLogo: boolean; // monogram from the KYC'd profile — never uploaded here
 
   // availability
   endDateEnabled: boolean;  // reusable
@@ -84,6 +89,9 @@ export const DEFAULT_QR: QrData = {
   showMerchantName: true,
   centerLogo: false,
 
+  screenTheme: "light",
+  showMerchantLogo: true,
+
   endDateEnabled: false,
   endDate: "",
   capEnabled: false,
@@ -102,7 +110,7 @@ export function validityMinutes(data: QrData): number {
 export function getQrSteps(usage: Usage): { key: string; label: string }[] {
   return usage === "reusable"
     ? [{ key: "setup", label: "QR Setup" }, { key: "design", label: "Design" }]
-    : [{ key: "setup", label: "QR Setup" }, { key: "collect", label: "Amount & validity" }];
+    : [{ key: "setup", label: "QR Setup" }, { key: "collectDesign", label: "Design" }];
 }
 
 export interface QrValidationError { step: number; message: string; }
@@ -122,10 +130,10 @@ export function validateQr(data: QrData): QrValidationError[] {
     }
   } else {
     if (!(parseFloat(data.oneTimeAmount || "0") > 0)) {
-      e.push({ step: 1, message: "Enter the amount to collect — a one-time QR always carries one." });
+      e.push({ step: 0, message: "Enter the amount to collect — a one-time QR always carries one." });
     }
     if (data.validityPreset === "custom" && !(parseInt(data.validityCustomMinutes || "0") > 0)) {
-      e.push({ step: 1, message: "Enter a custom validity in minutes, or pick a preset." });
+      e.push({ step: 0, message: "Enter a custom validity in minutes, or pick a preset." });
     }
   }
   return e;
@@ -165,11 +173,44 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
           </InfoBanner>
         ) : (
           <InfoBanner type="info">
-            A code for collecting <strong>one specific payment</strong> — share it on a screen, WhatsApp or email. It closes
-            after the payment, or when its timer runs out. You'll set the amount and validity in the next step.
+            A code for collecting <strong>one specific payment</strong> — show it to the payer on a screen, or send them the
+            payment link. It closes after the payment, or when its timer runs out.
           </InfoBanner>
         )}
       </SectionCard>
+
+      {data.usage === "onetime" && (
+        <>
+          <SectionCard title="Amount to collect">
+            <Inp label="Amount" required type="number" value={data.oneTimeAmount}
+              onChange={v => set({ oneTimeAmount: v })} prefix="₹" placeholder="12500" />
+            <InfoBanner type="info">
+              Encoded in the code — the payer's UPI app shows it pre-filled, so there's nothing to type and nothing to get
+              wrong.
+            </InfoBanner>
+          </SectionCard>
+
+          <SectionCard title="Valid for">
+            <SegmentedControl value={data.validityPreset}
+              onChange={v => set({ validityPreset: v as QrData["validityPreset"] })}
+              options={[
+                { key: "15", label: "15 min" }, { key: "60", label: "1 hour" },
+                { key: "1440", label: "24 hours" }, { key: "custom", label: "Custom" },
+              ]} />
+            {data.validityPreset === "custom" && (
+              <div style={{ marginTop: 14 }}>
+                <Inp label="Validity (minutes)" required type="number" value={data.validityCustomMinutes}
+                  onChange={v => set({ validityCustomMinutes: v })} placeholder="120" suffix="min" />
+              </div>
+            )}
+            <div style={{ marginTop: 14 }}>
+              <InfoBanner type="info">
+                The code closes the moment it's paid, or when the timer runs out — whichever comes first.
+              </InfoBanner>
+            </div>
+          </SectionCard>
+        </>
+      )}
 
       {data.usage === "reusable" && (
         <>
@@ -227,39 +268,40 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// STEP 2 (one-time) — Amount & validity
+// STEP 2 (one-time) — Design the COLLECT SCREEN. This surface reaches the
+// payer (shown on a device or opened from a shared link), so merchant identity
+// matters for trust. It's a screen, not print — dark mode is legitimate here.
+// Per the addendum's Dynamic QR spec, the fixed furniture is: QR block,
+// BHIM|UPI lockup, "Merchant Name | UPI ID" line, "Scan & Pay with any UPI
+// app", and the partner (EnKash) logo. [VERIFY: issuance date and the
+// "Pay with Credit on UPI" callout for on-screen dynamic QRs — Pallav/NPCI.]
 // ══════════════════════════════════════════════════════════════════════════════
-export function StepQrCollect({ data, setData }: { data: QrData; setData: (d: QrData) => void }) {
+export function StepQrCollectDesign({ data, setData }: { data: QrData; setData: (d: QrData) => void }) {
   const set = (patch: Partial<QrData>) => setData({ ...data, ...patch });
   return (
     <div>
-      <SectionCard title="Amount to collect">
-        <Inp label="Amount" required type="number" value={data.oneTimeAmount}
-          onChange={v => set({ oneTimeAmount: v })} prefix="₹" placeholder="12500" />
-        <InfoBanner type="info">
-          The amount is encoded in the code — the payer's UPI app shows it pre-filled, so there's nothing to type and
-          nothing to get wrong.
-        </InfoBanner>
+      <InfoBanner type="info">
+        This is the screen the <strong>payer sees</strong> — on your device, or when they open the shared link. The QR,
+        BHIM | UPI marks and your verified name are fixed; the look is yours.
+      </InfoBanner>
+
+      <SectionCard title="Screen theme">
+        <SegmentedControl value={data.screenTheme}
+          onChange={v => set({ screenTheme: v as ScreenTheme })}
+          options={[{ key: "light", label: "Light" }, { key: "dark", label: "Dark" }]} />
       </SectionCard>
 
-      <SectionCard title="Valid for">
-        <SegmentedControl value={data.validityPreset}
-          onChange={v => set({ validityPreset: v as QrData["validityPreset"] })}
-          options={[
-            { key: "15", label: "15 min" }, { key: "60", label: "1 hour" },
-            { key: "1440", label: "24 hours" }, { key: "custom", label: "Custom" },
-          ]} />
-        {data.validityPreset === "custom" && (
-          <div style={{ marginTop: 14 }}>
-            <Inp label="Validity (minutes)" required type="number" value={data.validityCustomMinutes}
-              onChange={v => set({ validityCustomMinutes: v })} placeholder="120" suffix="min" />
-          </div>
-        )}
-        <div style={{ marginTop: 14 }}>
-          <InfoBanner type="info">
-            The code closes the moment it's paid, or when the timer runs out — whichever comes first.
-          </InfoBanner>
-        </div>
+      <SectionCard title="Merchant logo">
+        <Toggle checked={data.showMerchantLogo} onChange={v => set({ showMerchantLogo: v })}
+          label="Show your logo on the collect screen"
+          desc="Comes from your verified merchant profile — payers instantly see whose collection this is." />
+      </SectionCard>
+
+      <SectionCard title="Accent colour">
+        <ColorPicker label="Accent" value={data.brandColor} onChange={v => set({ brandColor: v })} />
+        <p style={{ fontSize: 12, color: C.textFaint, margin: "2px 0 0", lineHeight: 1.5 }}>
+          Colours the amount, timer and logo — the QR block itself stays untouched for scannability.
+        </p>
       </SectionCard>
     </div>
   );
