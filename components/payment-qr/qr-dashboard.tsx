@@ -5,6 +5,7 @@ import { C, radius, shadow } from "@/components/payment-pages/tokens";
 import { StatusBadge, Btn, useClickOutside } from "@/components/payment-pages/primitives";
 import { Icon } from "@/components/payment-pages/icons";
 import { QrCode, QrStatus, QR_DASHBOARD_METRICS } from "./qr-mock-data";
+import { QrPaymentsPanel } from "./qr-payments";
 
 // ── Sparkline — identical to the Pages card: point-to-point line with a soft
 //    area fill, kept in a gentle centred band so it never stretches harshly. ──
@@ -156,6 +157,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
   onDownload: (q: QrCode) => void; onCopy: (q: QrCode) => void; onDelete: (q: QrCode) => void;
 }) {
   const m = QR_DASHBOARD_METRICS;
+  const [view, setView] = useState<"codes" | "payments">("codes");
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<"All" | QrStatus>("All");
   const [typeFilter, setTypeFilter] = useState("All");
@@ -202,6 +204,20 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
         </div>
         <Btn onClick={onCreate} size="lg"><Icon name="qr" size={16} color="#fff" /> Create QR</Btn>
       </div>
+
+      {/* QR codes | Payments — top-level views of the same product */}
+      <div style={{ display: "flex", gap: 22, borderBottom: `1px solid ${C.border}`, marginBottom: 22 }}>
+        {([["codes", "QR codes"], ["payments", "Payments"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setView(key)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: "0 2px 11px",
+              fontSize: 14, fontWeight: view === key ? 700 : 600, color: view === key ? C.text : C.textMuted,
+              borderBottom: view === key ? `2px solid ${C.blue}` : "2px solid transparent", marginBottom: -1 }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "payments" ? <QrPaymentsPanel codes={codes} /> : (<>
 
       {/* Stats — 2 breakdown + 2 graph, same order/treatment as Payment Pages */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
@@ -337,6 +353,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
           <span style={{ fontSize: 12, color: C.textFaint }}>Showing <strong style={{ color: C.textSecondary }}>{sorted.length}</strong> QR code{sorted.length === 1 ? "" : "s"}</span>
         </div>
       </div>
+      </>)}
     </div>
   );
 }
