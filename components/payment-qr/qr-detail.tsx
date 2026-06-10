@@ -18,16 +18,17 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () => void; onEdit: (qr: QrCode) => void }) {
   const data = qrToWizardData(qr);
-  const device = qr.usage === "onetime" ? "billing" : "standee";
+  const device = qr.usage === "onetime" ? "collect" : "standee";
+  const viaApi = qr.origin === "api";
   // The link carries the SHARED settlement VPA plus THIS QR's unique reference —
   // the reference is what attributes every payment back to this specific code.
   const link = upiString({
     vpa: qr.vpa, name: qr.merchantName, ref: qr.reference,
-    amount: qr.amountMode === "fixed" && qr.usage === "reusable" ? String(qr.amount).replace(/[^\d.]/g, "") : undefined,
+    amount: qr.amountValue ? String(qr.amountValue) : undefined,
   });
   const [copied, setCopied] = useState(false);
   const copy = () => { try { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } };
-  const usageLabel = qr.usage === "onetime" ? "One-time · per bill" : qr.amountMode === "fixed" ? "Reusable · fixed" : "Reusable · any amount";
+  const usageLabel = qr.usage === "onetime" ? (viaApi ? "One-time · via API" : "One-time collect") : qr.amountMode === "fixed" ? "Reusable · fixed" : "Reusable · any amount";
 
   const txns = txnsForQr(qr.id);
   const rate = successRateForQr(qr.id);
@@ -40,12 +41,21 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h1 style={{ fontSize: 23, fontWeight: 800, color: C.text, margin: 0, letterSpacing: "-0.02em" }}>{qr.label}</h1>
             <StatusBadge status={qr.status} />
+            {viaApi && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: radius.full, padding: "3px 10px", whiteSpace: "nowrap" }}>via API</span>
+            )}
           </div>
           <p style={{ fontSize: 13, color: C.textMuted, margin: "5px 0 0" }}>
             {qr.location} · created {qr.created} · ref <span style={{ fontFamily: "monospace" }}>{qr.reference}</span>
           </p>
         </div>
-        <Btn variant="secondary" onClick={() => onEdit(qr)}><Icon name="edit" size={14} /> Edit QR</Btn>
+        {viaApi ? (
+          <p style={{ fontSize: 12.5, color: C.textMuted, margin: 0, maxWidth: 260, textAlign: "right", lineHeight: 1.5 }}>
+            Minted by your system at transaction time — managed through the QR APIs, not editable here.
+          </p>
+        ) : (
+          <Btn variant="secondary" onClick={() => onEdit(qr)}><Icon name="edit" size={14} /> Edit QR</Btn>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
