@@ -1,7 +1,7 @@
 "use client";
 import { C, radius } from "@/components/payment-pages/tokens";
 import {
-  Inp, Label, Toggle, SegmentedControl, ColorPicker, InfoBanner, SectionCard, Btn,
+  Inp, Label, Toggle, SegmentedControl, ColorPicker, InfoBanner, SectionCard,
 } from "@/components/payment-pages/primitives";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -15,10 +15,10 @@ import {
 //           onetime  → fresh code per sale on a billing SCREEN, short timer,
 //                      closes on payment or timeout.
 //
-// "Menu" and "What to collect" were removed: a plain UPI QR cannot show a merchant
-// item list or capture custom fields — that all happens inside the customer's UPI
-// app, which the merchant can't touch. A price list, if wanted, is just printed
-// text on the standee (decorative); the customer still types the total.
+// Sticker content follows the NPCI BHIM UPI Merchant QR brand guidelines:
+// the printed layout is composed of the mandated elements (BHIM|UPI lockup,
+// partner + merchant identity, UPI ID, instruction line, issuance date).
+// Custom messages, images, and decorative content are not part of the sticker.
 // ──────────────────────────────────────────────────────────────────────────────
 
 export type AmountMode = "any" | "fixed";
@@ -26,26 +26,17 @@ export type Usage = "reusable" | "onetime";
 export type StandeeTheme = "light" | "dark";
 export type FrameStyle = "rounded" | "sharp" | "ticket";
 
-export interface PriceItem { id: string; label: string; amount: string; }
-
 export interface QrData {
   merchantName: string;
   label: string;
   vpa: string;
-  headline: string;
 
   usage: Usage;
   amountMode: AmountMode;   // only meaningful when usage === "reusable"
   fixedAmount: string;
 
-  // decorative price list printed on the standee (any-amount + reusable only)
-  priceListEnabled: boolean;
-  priceList: PriceItem[];
-
   // standee / screen design
   brandColor: string;
-  showLogo: boolean;
-  logoLetter: string;
   standeeTheme: StandeeTheme;
   frameStyle: FrameStyle;
 
@@ -61,21 +52,15 @@ export interface QrData {
 }
 
 export const DEFAULT_QR: QrData = {
-  merchantName: "EnKash Demo",
+  merchantName: "EnKash Demo Store",
   label: "",
-  vpa: "enkashdemo@okhdfcbank",
-  headline: "Scan & Pay",
+  vpa: "enkashstore@okhdfcbank",
 
   usage: "reusable",
   amountMode: "any",
   fixedAmount: "",
 
-  priceListEnabled: false,
-  priceList: [],
-
   brandColor: "#1c5af4",
-  showLogo: true,
-  logoLetter: "E",
   standeeTheme: "light",
   frameStyle: "rounded",
 
@@ -114,7 +99,6 @@ export function validateQr(data: QrData): QrValidationError[] {
 }
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-const uid = () => Math.random().toString(36).slice(2, 8);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // STEP 1 — QR Setup (usage + amount)
@@ -123,21 +107,6 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
   const set = (patch: Partial<QrData>) => setData({ ...data, ...patch });
   const setLabel = (v: string) => set({ label: v, slug: data.slugTouched ? data.slug : slugify(v) });
 
-  const addItem = () => set({ priceList: [...data.priceList, { id: uid(), label: "", amount: "" }] });
-  const updItem = (id: string, patch: Partial<PriceItem>) =>
-    set({ priceList: data.priceList.map(it => it.id === id ? { ...it, ...patch } : it) });
-  const delItem = (id: string) => set({ priceList: data.priceList.filter(it => it.id !== id) });
-
-  const itemRow = (it: PriceItem) => (
-    <div key={it.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <input value={it.label} onChange={e => updItem(it.id, { label: e.target.value })} placeholder="Item (e.g. Chai)"
-        style={{ flex: 1, padding: "9px 12px", border: `1.5px solid ${C.border}`, borderRadius: radius.md, fontSize: 14, fontFamily: "inherit", color: C.text, outline: "none", boxSizing: "border-box" }} />
-      <input value={it.amount} onChange={e => updItem(it.id, { amount: e.target.value })} placeholder="₹" type="number"
-        style={{ width: 96, padding: "9px 12px", border: `1.5px solid ${C.border}`, borderRadius: radius.md, fontSize: 14, fontFamily: "inherit", color: C.text, outline: "none", boxSizing: "border-box" }} />
-      <button onClick={() => delItem(it.id)} title="Remove"
-        style={{ width: 34, height: 34, flexShrink: 0, border: `1.5px solid ${C.border}`, background: C.white, borderRadius: radius.md, cursor: "pointer", color: C.textMuted }}>✕</button>
-    </div>
-  );
 
   return (
     <div>
@@ -173,7 +142,7 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
         <SectionCard title="What amount does it take?">
           <div style={{ marginBottom: 14 }}>
             <SegmentedControl value={data.amountMode}
-              onChange={v => set(v === "fixed" ? { amountMode: "fixed", priceListEnabled: false } : { amountMode: "any" })}
+              onChange={v => set({ amountMode: v as AmountMode })}
               options={[{ key: "any", label: "Any amount" }, { key: "fixed", label: "Fixed price" }]} />
           </div>
 
@@ -192,23 +161,6 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
                 One reusable code with no set amount — the customer types how much they're paying. Perfect for a counter
                 sticker.
               </InfoBanner>
-              <div style={{ marginTop: 14 }}>
-                <Toggle checked={data.priceListEnabled} onChange={v => set({ priceListEnabled: v })}
-                  label="Print a price list on the standee"
-                  desc="Just text on the card so customers know what to type — they still enter the amount themselves." />
-              </div>
-              {data.priceListEnabled && (
-                <div style={{ marginTop: 6 }}>
-                  <Label>Items shown on the card</Label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-                    {data.priceList.length === 0 && (
-                      <p style={{ fontSize: 13, color: C.textFaint, margin: "2px 0 6px" }}>No items yet — add a few (e.g. Chai ₹20).</p>
-                    )}
-                    {data.priceList.map(itemRow)}
-                  </div>
-                  <Btn variant="secondary" size="sm" onClick={addItem}>+ Add item</Btn>
-                </div>
-              )}
             </>
           )}
         </SectionCard>
@@ -263,10 +215,6 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
         auto-refunded to the customer.
       </p>
 
-      <SectionCard title="What it says">
-        <Inp label="Headline on the code" value={data.headline} onChange={v => set({ headline: v })}
-          placeholder="Scan & Pay" hint="The line printed above the QR square." />
-      </SectionCard>
     </div>
   );
 }
@@ -282,17 +230,15 @@ export function StepQrDesign({ data, setData }: { data: QrData; setData: (d: QrD
       <InfoBanner type="info">
         {reusable
           ? <>Design how your QR looks when <strong>printed</strong>. A <strong>standee</strong> is the small printed card you stand on your counter — like the PhonePe / Paytm cards you see at shops.</>
-          : <>Design how your QR looks on the <strong>billing screen</strong> the cashier shows each customer. Your brand colour and logo are applied automatically.</>}
+          : <>Design how your QR looks on the <strong>billing screen</strong> the cashier shows each customer. Your brand colour is applied automatically.</>}
       </InfoBanner>
 
       <SectionCard title="Brand">
         <ColorPicker label="Accent colour" value={data.brandColor} onChange={v => set({ brandColor: v })} />
-        <Toggle checked={data.showLogo} onChange={v => set({ showLogo: v })}
-          label="Show logo in the centre" desc="A small badge in the middle of the code (it still scans)." />
-        {data.showLogo && (
-          <Inp label="Logo letter" value={data.logoLetter}
-            onChange={v => set({ logoLetter: v.slice(0, 2).toUpperCase() })} placeholder="E" />
-        )}
+        <p style={{ fontSize: 12, color: C.textFaint, margin: "2px 0 0", lineHeight: 1.5 }}>
+          Used as the card background on the dark theme — the BHIM | UPI logo switches to its reverse (white) version
+          automatically.
+        </p>
       </SectionCard>
 
       {reusable && (
