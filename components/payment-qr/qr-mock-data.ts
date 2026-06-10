@@ -1,4 +1,4 @@
-import type { QrData, AmountMode, Usage, CardColorMode, LayoutVariant } from "./qr-wizard-steps";
+import type { QrData, AmountMode, Usage, CardColorMode, LayoutVariant, ScreenTheme } from "./qr-wizard-steps";
 import { qrMatrix } from "./qr-encoder";
 
 export type QrStatus = "Active" | "Inactive" | "Draft" | "Expired";
@@ -64,6 +64,8 @@ export interface QrCode {
   layoutVariant: LayoutVariant;
   showMerchantName: boolean;
   centerLogo: boolean;
+  screenTheme: ScreenTheme;
+  showMerchantLogo: boolean;
   draftData?: QrData;
   lastStep?: number;
 }
@@ -111,7 +113,7 @@ export function downloadQrPng(text: string, filename: string, scale = 16) {
 // 2 API-minted transaction QRs (read-only in this UI).
 const MERCHANT = MERCHANT_PROFILE.businessName;
 const SHARED_VPA = PRIMARY_VPA;
-const DESIGN_DEFAULTS = { brandColor: "#1c5af4", cardColorMode: "white" as CardColorMode, layoutVariant: "bhimTop" as LayoutVariant, showMerchantName: true, centerLogo: false };
+const DESIGN_DEFAULTS = { brandColor: "#1c5af4", cardColorMode: "white" as CardColorMode, layoutVariant: "bhimTop" as LayoutVariant, showMerchantName: true, centerLogo: false, screenTheme: "light" as ScreenTheme, showMerchantLogo: true };
 
 export const INITIAL_QRS: QrCode[] = [
   {
@@ -133,8 +135,8 @@ export const INITIAL_QRS: QrCode[] = [
     ...DESIGN_DEFAULTS,
   },
   {
-    id: "QR-ENK-COLL04", reference: "ENKD13QT", label: "Advance — Mehta Traders", merchantName: MERCHANT, vpa: SHARED_VPA,
-    usage: "onetime", amountMode: "fixed", amount: "₹12,500 · one-time", amountValue: 12500, origin: "dashboard", location: "Shared on WhatsApp",
+    id: "QR-ENK-COLL04", reference: "ENKD13QT", label: "Counter due — Mehta Traders", merchantName: MERCHANT, vpa: SHARED_VPA,
+    usage: "onetime", amountMode: "fixed", amount: "₹12,500 · one-time", amountValue: 12500, origin: "dashboard", location: "Collected at counter",
     payments: 1, revenue: "₹12,500", status: "Expired", created: "20 Dec 2024, 18:00",
     ...DESIGN_DEFAULTS,
   },
