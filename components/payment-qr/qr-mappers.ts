@@ -1,4 +1,4 @@
-import { QrData, DEFAULT_QR, AmountMode, Usage } from "./qr-wizard-steps";
+import { QrData, DEFAULT_QR, AmountMode, Usage, validityMinutes } from "./qr-wizard-steps";
 import { QrCode, QrStatus, genQrRef } from "./qr-mock-data";
 
 export function qrToWizardData(qr: QrCode): QrData {
@@ -10,19 +10,33 @@ export function qrToWizardData(qr: QrCode): QrData {
     vpa: qr.vpa,
     usage: qr.usage as Usage,
     amountMode: qr.amountMode as AmountMode,
-    fixedAmount: qr.amountMode === "fixed" && qr.usage === "reusable" ? String(qr.amount).replace(/[^\d.]/g, "") : "",
+    fixedAmount: qr.usage === "reusable" && qr.amountMode === "fixed" && qr.amountValue ? String(qr.amountValue) : "",
+    oneTimeAmount: qr.usage === "onetime" && qr.amountValue ? String(qr.amountValue) : "",
     brandColor: qr.brandColor,
-    standeeTheme: qr.standeeTheme,
+    cardColorMode: qr.cardColorMode,
+    layoutVariant: qr.layoutVariant,
+    showMerchantName: qr.showMerchantName,
+    centerLogo: qr.centerLogo,
     slug: qr.id.toLowerCase(),
   };
 }
 
-function amountDisplay(data: QrData): string {
-  if (data.usage === "onetime") return "Set per bill";
+function amountValue(data: QrData): number | undefined {
+  if (data.usage === "onetime") {
+    const n = parseFloat(data.oneTimeAmount || "0");
+    return n > 0 ? n : undefined;
+  }
   if (data.amountMode === "fixed") {
     const n = parseFloat(data.fixedAmount || "0");
-    return n > 0 ? `₹${n.toLocaleString("en-IN")}` : "—";
+    return n > 0 ? n : undefined;
   }
+  return undefined;
+}
+
+function amountDisplay(data: QrData): string {
+  const v = amountValue(data);
+  if (data.usage === "onetime") return v ? `₹${v.toLocaleString("en-IN")} · one-time` : "—";
+  if (data.amountMode === "fixed") return v ? `₹${v.toLocaleString("en-IN")}` : "—";
   return "Any amount";
 }
 
@@ -38,9 +52,11 @@ export function wizardDataToQr(
     merchantName: data.merchantName,
     vpa: data.vpa,
     usage: data.usage,
-    amountMode: data.amountMode,
+    amountMode: data.usage === "onetime" ? "fixed" : data.amountMode,
     amount: amountDisplay(data),
-    location: ex?.location ?? "—",
+    amountValue: amountValue(data),
+    origin: ex?.origin ?? "dashboard",
+    location: ex?.location ?? (data.usage === "onetime" ? `Valid ${validityMinutes(data)} min` : "—"),
     payments: ex?.payments ?? 0,
     revenue: ex?.revenue ?? "₹0",
     status: opts.status,
@@ -48,7 +64,10 @@ export function wizardDataToQr(
       day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
     }),
     brandColor: data.brandColor,
-    standeeTheme: data.standeeTheme,
+    cardColorMode: data.cardColorMode,
+    layoutVariant: data.layoutVariant,
+    showMerchantName: data.showMerchantName,
+    centerLogo: data.centerLogo,
     draftData: data,
     lastStep: opts.step,
   };
