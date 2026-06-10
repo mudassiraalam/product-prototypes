@@ -12,7 +12,7 @@ import { qrToWizardData, wizardDataToQr } from "./qr-mappers";
 
 type Screen = "dashboard" | "wizard" | "detail";
 
-const linkFor = (q: QrCode) => upiString({ vpa: q.vpa, name: q.merchantName, amount: q.amountMode === "fixed" && q.usage === "reusable" ? String(q.amount).replace(/[^\d.]/g, "") : undefined });
+const linkFor = (q: QrCode) => upiString({ vpa: q.vpa, name: q.merchantName, ref: q.reference, amount: q.amountMode === "fixed" && q.usage === "reusable" ? String(q.amount).replace(/[^\d.]/g, "") : undefined });
 
 export function QrApp({ onNavigateProduct }: { onNavigateProduct: (key: string) => void }) {
   const [codes, setCodes] = useState<QrCode[]>(INITIAL_QRS);
