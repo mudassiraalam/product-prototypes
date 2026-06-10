@@ -5,7 +5,7 @@ import { Icon } from "@/components/payment-pages/icons";
 import { Btn, StatusBadge } from "@/components/payment-pages/primitives";
 import { QrCode, txnsForQr, successRateForQr, upiString, downloadQrPng } from "./qr-mock-data";
 import { qrToWizardData } from "./qr-mappers";
-import { QrPreview } from "./qr-preview";
+import { QrPreview, CollectMode } from "./qr-preview";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -18,8 +18,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () => void; onEdit: (qr: QrCode) => void }) {
   const data = qrToWizardData(qr);
-  const device = qr.usage === "onetime" ? "collect" : "standee";
+  const device = qr.usage === "onetime" ? ("collect" as const) : ("standee" as const);
   const viaApi = qr.origin === "api";
+  // A one-time QR's card is history once it closes: collected (it was paid,
+  // then closed) or expired (timer ran out unpaid). Only Active ones tick.
+  const collectMode: CollectMode = qr.status === "Active" ? "live" : qr.payments > 0 ? "collected" : "expired";
+  const immutable = viaApi || qr.usage === "onetime"; // published one-time QRs can't be edited
   // The link carries the SHARED settlement VPA plus THIS QR's unique reference —
   // the reference is what attributes every payment back to this specific code.
   const link = upiString({
@@ -49,9 +53,11 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
             {qr.location} · created {qr.created} · ref <span style={{ fontFamily: "monospace" }}>{qr.reference}</span>
           </p>
         </div>
-        {viaApi ? (
-          <p style={{ fontSize: 12.5, color: C.textMuted, margin: 0, maxWidth: 260, textAlign: "right", lineHeight: 1.5 }}>
-            Minted by your system at transaction time — managed through the QR APIs, not editable here.
+        {immutable ? (
+          <p style={{ fontSize: 12.5, color: C.textMuted, margin: 0, maxWidth: 280, textAlign: "right", lineHeight: 1.5 }}>
+            {viaApi
+              ? "Minted by your system via the QR APIs — its collect screen inherits your account branding defaults. Not editable here."
+              : "A one-time QR is locked once generated — its amount and validity can't change after it's been shown or shared."}
           </p>
         ) : (
           <Btn variant="secondary" onClick={() => onEdit(qr)}><Icon name="edit" size={14} /> Edit QR</Btn>
@@ -60,7 +66,7 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
 
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ background: "#e9ecf3", borderRadius: radius.xl, padding: "30px 26px", flexShrink: 0 }}>
-          <QrPreview data={data} device={device} />
+          <QrPreview data={data} device={device} collectMode={collectMode} />
           {qr.usage === "reusable" && (
             <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "center" }}>
               <Btn variant="secondary" size="sm" onClick={() => downloadQrPng(link, qr.label)}><Icon name="download" size={14} /> PNG</Btn>
