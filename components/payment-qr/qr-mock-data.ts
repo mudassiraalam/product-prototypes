@@ -3,16 +3,27 @@ import { qrMatrix } from "./qr-encoder";
 
 export type QrStatus = "Active" | "Inactive" | "Draft" | "Expired";
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Attribution model (how a PSP knows WHICH QR a payment came through):
+//   • All of a merchant's QRs can share ONE settlement VPA (`pa`) — that's just
+//     where the money lands.
+//   • Each QR carries its own unique REFERENCE (`tr` in the upi:// string).
+//     The reference rides back with every payment, so each payment maps to the
+//     exact QR that was scanned — even with an identical VPA on every code.
+//   • Each individual payment is separated by its UTR (the UPI rail's own id).
+// ──────────────────────────────────────────────────────────────────────────────
+
 export interface QrCode {
   id: string;
+  reference: string;     // unique per QR → encoded as `tr`; attribution key
   label: string;
   merchantName: string;
-  vpa: string;
+  vpa: string;           // shared settlement VPA across all this merchant's QRs
   usage: Usage;
   amountMode: AmountMode;
   amount: string;        // display: "₹499" / "Any amount" / "Set per bill"
   location: string;
-  payments: number;      // successful payments (real, attributable per code)
+  payments: number;      // successful payments attributed to this code
   revenue: string;
   status: QrStatus;
   created: string;
@@ -23,8 +34,9 @@ export interface QrCode {
 }
 
 // ── UPI deep-link builder ─────────────────────────────────────────────────────
-// A UPI QR encodes a `upi://pay?...` string that opens the customer's UPI app
-// directly with the amount pre-filled — it is NOT a web URL.
+// A UPI QR encodes a `upi://pay?...` string that opens the customer's UPI app.
+// `pa` = settlement VPA (can be shared) · `tr` = per-QR reference (attribution)
+// `am` = amount (dynamic only) — the ONLY field that differs static vs dynamic.
 export function upiString(opts: { vpa: string; name: string; amount?: string; note?: string; ref?: string }): string {
   const p = new URLSearchParams();
   p.set("pa", opts.vpa || "merchant@upi");
@@ -59,55 +71,54 @@ export function downloadQrPng(text: string, filename: string, scale = 16) {
   } catch { /* no-op in non-browser contexts */ }
 }
 
-// ── Seed rows — one of each status, both usages, both amount modes ────────────
+// ── Seed rows — ONE merchant, ONE shared VPA, 3 static + 2 dynamic ────────────
+const MERCHANT = "EnKash Demo Store";
+const SHARED_VPA = "enkashstore@okhdfcbank";
+
 export const INITIAL_QRS: QrCode[] = [
   {
-    id: "QR-ENK-CNTR01", label: "Front Counter", merchantName: "Brew & Bean Cafe", vpa: "brewbean@okhdfcbank",
+    id: "QR-ENK-CNTR01", reference: "ENKA91X4", label: "Front Counter", merchantName: MERCHANT, vpa: SHARED_VPA,
     usage: "reusable", amountMode: "any", amount: "Any amount", location: "Main counter",
     payments: 2774, revenue: "₹4,16,100", status: "Active", created: "02 Jan 2025, 09:10",
-    brandColor: "#0891b2", standeeTheme: "light",
-  },
-  {
-    id: "QR-ENK-STALL7", label: "Tea Stall", merchantName: "Sharma Chai Point", vpa: "sharmachai@okaxis",
-    usage: "reusable", amountMode: "any", amount: "Any amount", location: "Stall 7, Food Court",
-    payments: 5102, revenue: "₹2,71,440", status: "Active", created: "18 Dec 2024, 07:30",
-    brandColor: "#ea580c", standeeTheme: "dark",
-  },
-  {
-    id: "QR-ENK-EVENT3", label: "Entry — Music Night", merchantName: "The Backyard", vpa: "backyard@okicici",
-    usage: "reusable", amountMode: "fixed", amount: "₹499", location: "Gate A",
-    payments: 612, revenue: "₹3,05,388", status: "Inactive", created: "20 Dec 2024, 18:00",
-    brandColor: "#7c3aed", standeeTheme: "dark",
-  },
-  {
-    id: "QR-ENK-DESK02", label: "Reception Desk", merchantName: "EnKash Demo", vpa: "enkashdemo@okhdfcbank",
-    usage: "onetime", amountMode: "fixed", amount: "Set per bill", location: "Lobby",
-    payments: 0, revenue: "₹0", status: "Draft", created: "28 Dec 2024, 12:05",
     brandColor: "#1c5af4", standeeTheme: "light",
   },
   {
-    id: "QR-ENK-FEST24", label: "Diwali Mela Stall", merchantName: "Craft Collective", vpa: "craftco@oksbi",
-    usage: "reusable", amountMode: "any", amount: "Any amount", location: "Mela Stall 12",
+    id: "QR-ENK-GATE02", reference: "ENKB72K9", label: "Entry Gate", merchantName: MERCHANT, vpa: SHARED_VPA,
+    usage: "reusable", amountMode: "fixed", amount: "₹100", location: "Gate A",
+    payments: 612, revenue: "₹61,200", status: "Active", created: "18 Dec 2024, 07:30",
+    brandColor: "#1c5af4", standeeTheme: "dark",
+  },
+  {
+    id: "QR-ENK-STALL3", reference: "ENKC58M2", label: "Stall #3", merchantName: MERCHANT, vpa: SHARED_VPA,
+    usage: "reusable", amountMode: "any", amount: "Any amount", location: "Expo stall 3",
     payments: 1331, revenue: "₹1,98,400", status: "Expired", created: "28 Oct 2024, 16:40",
-    brandColor: "#16a34a", standeeTheme: "light",
+    brandColor: "#1c5af4", standeeTheme: "light",
+  },
+  {
+    id: "QR-ENK-BILL04", reference: "ENKD13QT", label: "Billing Screen", merchantName: MERCHANT, vpa: SHARED_VPA,
+    usage: "onetime", amountMode: "fixed", amount: "Set per bill", location: "Checkout 1",
+    payments: 5102, revenue: "₹5,21,440", status: "Active", created: "20 Dec 2024, 18:00",
+    brandColor: "#1c5af4", standeeTheme: "light",
+  },
+  {
+    id: "QR-ENK-DLVR05", reference: "ENKE66ZP", label: "Delivery QR", merchantName: MERCHANT, vpa: SHARED_VPA,
+    usage: "onetime", amountMode: "fixed", amount: "Set per bill", location: "Field delivery",
+    payments: 388, revenue: "₹97,310", status: "Inactive", created: "05 Nov 2024, 12:05",
+    brandColor: "#1c5af4", standeeTheme: "dark",
   },
 ];
 
 // ── Dashboard headline metrics — every number is one a PSP actually reports ───
 // (No "scans" or "scan→pay": a printed QR cannot report a scan back to anyone.)
-// QR dashboard: one breakdown card (codes by status) + three graph cards
-// (Collected, Successful, Failed). Each trend is its own distinct shape.
-// Failed is a "bad" metric: its line DESCENDS and the delta is negative, so the
-// card flips the colour to green (a falling failure count is good news).
 export const QR_DASHBOARD_METRICS = {
   totalCodes: 5,
-  statusCounts: { active: 2, draft: 1, inactive: 1, expired: 1 },
+  statusCounts: { active: 3, draft: 0, inactive: 1, expired: 1 },
 
-  totalCollected: "₹11.9L",
+  totalCollected: "₹12.9L",
   collectedTrend: [44, 39, 58, 52, 71, 64, 96],
   collectedDeltaPct: 18,
 
-  successfulPayments: 9819,
+  successfulPayments: 10207,
   successRate: 93,
   successTrend: [180, 240, 220, 310, 360, 420, 540],
 
@@ -116,11 +127,36 @@ export const QR_DASHBOARD_METRICS = {
   failedDeltaPct: -4,
 } as const;
 
-// ── Recent payments — what really settles back: masked payer VPA + UTR ────────
-export const QR_TRANSACTIONS = [
-  { id: "TXN-Q01", payerVpa: "9xxxx2317@ybl", utr: "447100982231", amount: "₹249", status: "Success", time: "28 Dec 2024, 11:22" },
-  { id: "TXN-Q02", payerVpa: "ra**sh@okhdfc", utr: "882034117765", amount: "₹60", status: "Success", time: "28 Dec 2024, 11:05" },
-  { id: "TXN-Q03", payerVpa: "8xxxx9043@apl", utr: "129044556610", amount: "₹249", status: "Failed", time: "28 Dec 2024, 10:51" },
-  { id: "TXN-Q04", payerVpa: "pr**ti@oksbi", utr: "776512094432", amount: "₹120", status: "Success", time: "28 Dec 2024, 10:33" },
-  { id: "TXN-Q05", payerVpa: "7xxxx1180@ybl", utr: "330187654221", amount: "₹40", status: "Success", time: "28 Dec 2024, 10:18" },
+// ── Payments — every row carries qrId (via the QR's reference) + its own UTR ──
+export interface QrTxn {
+  id: string;
+  qrId: string;          // ← attribution: which QR was scanned
+  payerVpa: string;
+  utr: string;           // unique per payment (UPI rail id)
+  amount: string;
+  status: "Success" | "Failed";
+  time: string;
+}
+
+export const QR_TRANSACTIONS: QrTxn[] = [
+  { id: "TXN-Q01", qrId: "QR-ENK-CNTR01", payerVpa: "9xxxx2317@ybl", utr: "447100982231", amount: "₹249", status: "Success", time: "28 Dec 2024, 11:22" },
+  { id: "TXN-Q02", qrId: "QR-ENK-BILL04", payerVpa: "ra**sh@okhdfc", utr: "882034117765", amount: "₹1,250", status: "Success", time: "28 Dec 2024, 11:05" },
+  { id: "TXN-Q03", qrId: "QR-ENK-CNTR01", payerVpa: "8xxxx9043@apl", utr: "129044556610", amount: "₹249", status: "Failed", time: "28 Dec 2024, 10:51" },
+  { id: "TXN-Q04", qrId: "QR-ENK-GATE02", payerVpa: "pr**ti@oksbi", utr: "776512094432", amount: "₹100", status: "Success", time: "28 Dec 2024, 10:33" },
+  { id: "TXN-Q05", qrId: "QR-ENK-BILL04", payerVpa: "7xxxx1180@ybl", utr: "330187654221", amount: "₹990", status: "Success", time: "28 Dec 2024, 10:18" },
+  { id: "TXN-Q06", qrId: "QR-ENK-CNTR01", payerVpa: "an**ta@okicici", utr: "551209873340", amount: "₹80", status: "Success", time: "28 Dec 2024, 09:56" },
+  { id: "TXN-Q07", qrId: "QR-ENK-DLVR05", payerVpa: "6xxxx4421@ptm", utr: "204876119923", amount: "₹560", status: "Failed", time: "28 Dec 2024, 09:41" },
+  { id: "TXN-Q08", qrId: "QR-ENK-GATE02", payerVpa: "vi**ay@ybl", utr: "667320948811", amount: "₹100", status: "Success", time: "28 Dec 2024, 09:27" },
+  { id: "TXN-Q09", qrId: "QR-ENK-STALL3", payerVpa: "9xxxx7752@oksbi", utr: "118245660934", amount: "₹520", status: "Success", time: "27 Dec 2024, 18:44" },
+  { id: "TXN-Q10", qrId: "QR-ENK-BILL04", payerVpa: "me**na@okaxis", utr: "905134228876", amount: "₹2,340", status: "Success", time: "27 Dec 2024, 17:12" },
+  { id: "TXN-Q11", qrId: "QR-ENK-DLVR05", payerVpa: "8xxxx0915@apl", utr: "443652091178", amount: "₹430", status: "Success", time: "27 Dec 2024, 15:50" },
+  { id: "TXN-Q12", qrId: "QR-ENK-CNTR01", payerVpa: "ku**al@ybl", utr: "771204956623", amount: "₹150", status: "Success", time: "27 Dec 2024, 14:36" },
 ];
+
+export const txnsForQr = (qrId: string): QrTxn[] => QR_TRANSACTIONS.filter(t => t.qrId === qrId);
+
+export const successRateForQr = (qrId: string): number | null => {
+  const list = txnsForQr(qrId);
+  if (list.length === 0) return null;
+  return Math.round((list.filter(t => t.status === "Success").length / list.length) * 100);
+};
