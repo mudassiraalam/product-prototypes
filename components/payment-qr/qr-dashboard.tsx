@@ -130,7 +130,7 @@ function RowKebab({ qr, open, onToggle, onClose, onEdit, onToggleStatus, onDownl
         style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: open ? C.blueLight : C.bg, border: "none", borderRadius: radius.sm, cursor: "pointer", fontSize: 16, color: open ? C.blue : C.textMuted, fontFamily: "inherit" }}>⋮</button>
       {open && (
         <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 184, padding: 6 }}>
-          {qr.origin !== "api" && (
+          {qr.origin !== "api" && !(qr.usage === "onetime" && qr.status !== "Draft") && (
             <div onClick={() => { onEdit(); onClose(); }} style={{ ...itemStyle, color: C.textSecondary }} onMouseEnter={hov(true)} onMouseLeave={hov(false)}><Icon name="edit" size={15} /> Edit</div>
           )}
           {qr.status !== "Draft" && qr.status !== "Expired" && (
