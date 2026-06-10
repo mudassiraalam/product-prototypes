@@ -17,6 +17,8 @@ export function qrToWizardData(qr: QrCode): QrData {
     layoutVariant: qr.layoutVariant,
     showMerchantName: qr.showMerchantName,
     centerLogo: qr.centerLogo,
+    screenTheme: qr.screenTheme,
+    showMerchantLogo: qr.showMerchantLogo,
     slug: qr.id.toLowerCase(),
   };
 }
@@ -68,6 +70,8 @@ export function wizardDataToQr(
     layoutVariant: data.layoutVariant,
     showMerchantName: data.showMerchantName,
     centerLogo: data.centerLogo,
+    screenTheme: data.screenTheme,
+    showMerchantLogo: data.showMerchantLogo,
     draftData: data,
     lastStep: opts.step,
   };
