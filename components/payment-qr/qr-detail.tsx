@@ -3,7 +3,7 @@ import { useState } from "react";
 import { C, radius, shadow } from "@/components/payment-pages/tokens";
 import { Icon } from "@/components/payment-pages/icons";
 import { Btn, StatusBadge } from "@/components/payment-pages/primitives";
-import { QrCode, QR_TRANSACTIONS, upiString, downloadQrPng } from "./qr-mock-data";
+import { QrCode, txnsForQr, successRateForQr, upiString, downloadQrPng } from "./qr-mock-data";
 import { qrToWizardData } from "./qr-mappers";
 import { QrPreview } from "./qr-preview";
 
@@ -19,10 +19,18 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () => void; onEdit: (qr: QrCode) => void }) {
   const data = qrToWizardData(qr);
   const device = qr.usage === "onetime" ? "billing" : "standee";
-  const link = upiString({ vpa: qr.vpa, name: qr.merchantName, amount: qr.amountMode === "fixed" && qr.usage === "reusable" ? String(qr.amount).replace(/[^\d.]/g, "") : undefined });
+  // The link carries the SHARED settlement VPA plus THIS QR's unique reference —
+  // the reference is what attributes every payment back to this specific code.
+  const link = upiString({
+    vpa: qr.vpa, name: qr.merchantName, ref: qr.reference,
+    amount: qr.amountMode === "fixed" && qr.usage === "reusable" ? String(qr.amount).replace(/[^\d.]/g, "") : undefined,
+  });
   const [copied, setCopied] = useState(false);
   const copy = () => { try { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } };
   const usageLabel = qr.usage === "onetime" ? "One-time · per bill" : qr.amountMode === "fixed" ? "Reusable · fixed" : "Reusable · any amount";
+
+  const txns = txnsForQr(qr.id);
+  const rate = successRateForQr(qr.id);
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "26px 30px", background: C.bg }}>
@@ -33,7 +41,9 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
             <h1 style={{ fontSize: 23, fontWeight: 800, color: C.text, margin: 0, letterSpacing: "-0.02em" }}>{qr.label}</h1>
             <StatusBadge status={qr.status} />
           </div>
-          <p style={{ fontSize: 13, color: C.textMuted, margin: "5px 0 0" }}>{qr.location} · created {qr.created}</p>
+          <p style={{ fontSize: 13, color: C.textMuted, margin: "5px 0 0" }}>
+            {qr.location} · created {qr.created} · ref <span style={{ fontFamily: "monospace" }}>{qr.reference}</span>
+          </p>
         </div>
         <Btn variant="secondary" onClick={() => onEdit(qr)}><Icon name="edit" size={14} /> Edit QR</Btn>
       </div>
@@ -53,19 +63,27 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
           <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
             <Stat label="Payments" value={qr.payments.toLocaleString("en-IN")} />
             <Stat label="Collected" value={qr.revenue} />
+            <Stat label="Success rate" value={rate === null ? "—" : `${rate}%`} />
             <Stat label="Type" value={usageLabel} />
           </div>
 
           <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden", boxShadow: shadow.sm }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", margin: 0, padding: "13px 18px", borderBottom: `1px solid ${C.border}` }}>Payments at this QR</p>
-            {QR_TRANSACTIONS.map((t, i) => (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: i < QR_TRANSACTIONS.length - 1 ? `1px solid ${C.borderLight}` : "none", fontSize: 13 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 18px", borderBottom: `1px solid ${C.border}` }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Payments at this QR</p>
+              <span style={{ fontSize: 11.5, color: C.textFaint }}>matched by ref {qr.reference}</span>
+            </div>
+            {txns.length === 0 && (
+              <p style={{ fontSize: 13, color: C.textFaint, margin: 0, padding: "18px" }}>No payments at this QR yet.</p>
+            )}
+            {txns.map((t, i) => (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 18px", borderBottom: i < txns.length - 1 ? `1px solid ${C.borderLight}` : "none", fontSize: 13 }}>
+                <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                   <span style={{ fontFamily: "monospace", fontSize: 12, color: C.textSecondary }}>{t.payerVpa}</span>
                   <span style={{ fontSize: 11, color: C.textFaint }}>UTR {t.utr}</span>
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <span style={{ fontWeight: 700, color: C.text }}>{t.amount}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11.5, color: C.textMuted, whiteSpace: "nowrap" }}>{t.time}</span>
+                  <span style={{ fontWeight: 700, color: C.text, minWidth: 56, textAlign: "right" }}>{t.amount}</span>
                   <StatusBadge status={t.status} />
                 </span>
               </div>
