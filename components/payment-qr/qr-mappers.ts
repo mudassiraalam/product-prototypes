@@ -1,5 +1,5 @@
 import { QrData, DEFAULT_QR, AmountMode, Usage } from "./qr-wizard-steps";
-import { QrCode, QrStatus } from "./qr-mock-data";
+import { QrCode, QrStatus, genQrRef } from "./qr-mock-data";
 
 export function qrToWizardData(qr: QrCode): QrData {
   if (qr.draftData) return qr.draftData;
@@ -33,6 +33,7 @@ export function wizardDataToQr(
   const ex = opts.existing;
   return {
     id: opts.id,
+    reference: ex?.reference ?? genQrRef(),
     label: data.label || "Untitled QR",
     merchantName: data.merchantName,
     vpa: data.vpa,
