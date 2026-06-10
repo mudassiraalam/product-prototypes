@@ -36,7 +36,7 @@ export function QrApp({ onNavigateProduct }: { onNavigateProduct: (key: string) 
     setSnapshot(JSON.stringify(data)); setSessionKey(k => k + 1); setScreen("wizard");
   };
   const startCreate = () => beginSession(null);
-  const startEdit = (qr: QrCode) => { if (qr.origin === "api") { setSelected(qr); setScreen("detail"); return; } beginSession(qr); };
+  const startEdit = (qr: QrCode) => { if (qr.origin === "api" || (qr.usage === "onetime" && qr.status !== "Draft")) { setSelected(qr); setScreen("detail"); return; } beginSession(qr); };
   const exitToDashboard = () => { setEditing(null); setSelected(null); setLive({ data: DEFAULT_QR, step: 0, building: false }); setSnapshot(""); setScreen("dashboard"); };
 
   const genId = () => "QR-ENK-" + Math.random().toString(36).slice(2, 8).toUpperCase();
