@@ -6,91 +6,109 @@ import { QrData } from "./qr-wizard-steps";
 import { upiString, genQrRef } from "./qr-mock-data";
 import { qrMatrix } from "./qr-encoder";
 
-// ── Real, scannable QR rendered as crisp SVG ──────────────────────────────────
-function QrSvg({ text, size, logoLetter, logoColor }: {
-  text: string; size: number; logoLetter?: string; logoColor?: string;
-}) {
+// ──────────────────────────────────────────────────────────────────────────────
+// Sticker layout per NPCI BHIM UPI Merchant QR brand guidelines:
+//   BHIM|UPI lockup above the QR · QR ≥60% of layout · issuance date (MM/YYYY)
+//   on the right of the QR · "UPI ID: <vpa>" line · "Scan & Pay with any UPI
+//   app" instruction · partner logo with merchant logo/name placed beside it.
+//   On a brand-coloured/dark background the BHIM|UPI logo uses its reverse
+//   (white) version. No custom messages, images, or in-QR logo badges.
+// Assets: /logos/bhim.svg · /logos/upi.svg · /logos/enkash.svg (partner).
+// ──────────────────────────────────────────────────────────────────────────────
+
+const REVERSE: React.CSSProperties = { filter: "brightness(0) invert(1)" };
+
+function BhimUpiLockup({ reverse, height = 16 }: { reverse?: boolean; height?: number }) {
+  const [upiOk, setUpiOk] = useState(true);
+  const img = reverse ? REVERSE : undefined;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+      <img src="/logos/bhim.svg" alt="BHIM" style={{ height, display: "block", ...img }} />
+      <span style={{ width: 1, height: height * 1.05, background: reverse ? "rgba(255,255,255,0.65)" : "#a8aeb8" }} />
+      {upiOk ? (
+        <img src="/logos/upi.svg" alt="UPI" style={{ height: height * 0.95, display: "block", ...img }} onError={() => setUpiOk(false)} />
+      ) : (
+        <span style={{ fontSize: height * 0.78, fontWeight: 800, letterSpacing: "0.06em", color: reverse ? "#fff" : "#6d6e71", fontStyle: "italic" }}>UPI</span>
+      )}
+    </span>
+  );
+}
+
+function PartnerLogo({ reverse, height = 14 }: { reverse?: boolean; height?: number }) {
+  return <img src="/logos/enkash.svg" alt="EnKash" style={{ height, display: "block", ...(reverse ? REVERSE : undefined) }} />;
+}
+
+const issuanceDate = () => {
+  const d = new Date();
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
+
+// ── Real, scannable QR rendered as crisp SVG (no in-QR badge — not permitted) ──
+function QrSvg({ text, size }: { text: string; size: number }) {
   const matrix = useMemo(() => { try { return qrMatrix(text); } catch { return null; } }, [text]);
-  if (!matrix) return <div style={{ width: size, height: size, background: "#fff", borderRadius: 8 }} />;
+  if (!matrix) return <div style={{ width: size, height: size, background: "#fff", borderRadius: 6 }} />;
   const n = matrix.length, quiet = 3, dim = n + quiet * 2;
   let d = "";
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (matrix[y][x]) d += `M${x + quiet} ${y + quiet}h1v1h-1z`;
-  const logoSize = dim * 0.26, logoXY = (dim - logoSize) / 2;
   return (
     <svg viewBox={`0 0 ${dim} ${dim}`} width={size} height={size} shapeRendering="crispEdges" style={{ display: "block", borderRadius: 6 }}>
       <rect width={dim} height={dim} fill="#fff" />
       <path d={d} fill="#0f172a" />
-      {logoLetter && (
-        <>
-          <rect x={logoXY} y={logoXY} width={logoSize} height={logoSize} rx={logoSize * 0.22} fill="#fff" />
-          <rect x={logoXY + logoSize * 0.1} y={logoXY + logoSize * 0.1} width={logoSize * 0.8} height={logoSize * 0.8} rx={logoSize * 0.18} fill={logoColor || C.blue} />
-          <text x={dim / 2} y={dim / 2} dominantBaseline="central" textAnchor="middle" fontSize={logoSize * 0.48} fontWeight={800} fill="#fff" fontFamily="var(--font-inter, 'Inter', sans-serif)">{logoLetter}</text>
-        </>
-      )}
     </svg>
   );
 }
 
-function amountLabel(data: QrData): string {
-  if (data.amountMode === "fixed") {
-    const n = parseFloat(data.fixedAmount || "0");
-    return n > 0 ? `₹${n.toLocaleString("en-IN")}` : "Set an amount";
-  }
-  return "Enter any amount";
-}
-// reusable standee encodes amount only when fixed; any-amount stays open
+// Stable preview reference: the published QR gets its real unique `tr` at
+// creation — the preview only needs to demonstrate that the string carries one.
+const PREVIEW_REF = "ENKPREVIEW";
 function standeeUpi(data: QrData): string {
   const amount = data.amountMode === "fixed" ? data.fixedAmount : undefined;
-  return upiString({ vpa: data.vpa, name: data.merchantName, amount, ref: data.amountMode === "fixed" ? genQrRef() : undefined });
+  return upiString({ vpa: data.vpa, name: data.merchantName, amount, ref: PREVIEW_REF });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// STANDEE — printed card (reusable). Ticket frame now has real side-notches,
-// a dashed tear-line, and a stub — no more floating dots.
+// STANDEE — printed card (static / reusable), composed per the NPCI layout.
+// Light theme = white card · Dark theme = brand-coloured card + reverse logos.
 // ══════════════════════════════════════════════════════════════════════════════
 export function Standee({ data, surface = "#e9ecf3" }: { data: QrData; surface?: string }) {
   const dark = data.standeeTheme === "dark";
-  const cardBg = dark ? "#0f172a" : "#ffffff";
-  const text = dark ? "#f8fafc" : C.text;
-  const sub = dark ? "#94a3b8" : C.textMuted;
-  const dash = dark ? "#334155" : "#cbd2e0";
+  const cardBg = dark ? data.brandColor : "#ffffff";
+  const text = dark ? "#ffffff" : C.text;
+  const sub = dark ? "rgba(255,255,255,0.78)" : C.textMuted;
+  const dash = dark ? "rgba(255,255,255,0.35)" : "#cbd2e0";
   const ticket = data.frameStyle === "ticket";
   const topRadius = data.frameStyle === "sharp" ? 3 : 18;
-  const items = (data.amountMode === "any" && data.priceListEnabled) ? data.priceList.filter(i => i.label) : [];
+  const fixedAmt = data.amountMode === "fixed" ? parseFloat(data.fixedAmount || "0") : 0;
 
   const body = (
-    <div style={{ background: cardBg, padding: "24px 24px 22px", display: "flex", flexDirection: "column", alignItems: "center",
-      borderTop: `5px solid ${data.brandColor}`, borderRadius: ticket ? `${topRadius}px ${topRadius}px 0 0` : topRadius }}>
-      {data.showLogo ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: data.brandColor, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 14 }}>{data.logoLetter || "E"}</div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{data.merchantName}</span>
-        </div>
-      ) : <span style={{ fontSize: 14, fontWeight: 700, color: text, marginBottom: 10 }}>{data.merchantName}</span>}
+    <div style={{ background: cardBg, padding: "20px 22px 18px", display: "flex", flexDirection: "column", alignItems: "center",
+      borderRadius: ticket ? `${topRadius}px ${topRadius}px 0 0` : topRadius, border: dark ? "none" : `1px solid ${C.borderLight}` }}>
 
-      <p style={{ fontSize: 19, fontWeight: 800, color: text, margin: "0 0 14px", letterSpacing: "-0.01em" }}>{data.headline || "Scan & Pay"}</p>
+      <BhimUpiLockup reverse={dark} height={17} />
 
-      <div style={{ background: "#fff", padding: 12, borderRadius: 14 }}>
-        <QrSvg text={standeeUpi(data)} size={184} logoLetter={data.showLogo ? (data.logoLetter || "E") : undefined} logoColor={data.brandColor} />
+      <div style={{ display: "flex", alignItems: "stretch", gap: 6, marginTop: 14 }}>
+        <QrSvg text={standeeUpi(data)} size={188} />
+        <span style={{ fontSize: 8.5, color: sub, writingMode: "vertical-rl", alignSelf: "center", letterSpacing: "0.06em" }}>{issuanceDate()}</span>
       </div>
 
-      <div style={{ marginTop: 13, fontSize: 15, fontWeight: 700, color: data.brandColor }}>{amountLabel(data)}</div>
+      <div style={{ marginTop: 11, fontSize: 11.5, color: text, fontWeight: 600 }}>
+        UPI ID: <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{data.vpa || "yourbusiness@bank"}</span>
+      </div>
 
-      {items.length > 0 && (
-        <div style={{ width: "100%", marginTop: 12, borderTop: `1px dashed ${dash}`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 5 }}>
-          {items.slice(0, 6).map(i => (
-            <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-              <span style={{ color: sub }}>{i.label}</span><span style={{ fontWeight: 600, color: text }}>₹{i.amount || "0"}</span>
-            </div>
-          ))}
-        </div>
+      {fixedAmt > 0 && (
+        <div style={{ marginTop: 4, fontSize: 13.5, fontWeight: 800, color: text }}>₹{fixedAmt.toLocaleString("en-IN")}</div>
       )}
 
-      <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 7 }}>
-        <span style={{ display: "flex", gap: 3 }}>
-          {["#5f259f", "#00baf2", "#2da94f", "#ea4335"].map(c => <span key={c} style={{ width: 7, height: 7, borderRadius: "50%", background: c }} />)}
+      <div style={{ marginTop: 9, fontSize: 11, fontWeight: 800, color: text, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        Scan &amp; Pay with any UPI app
+      </div>
+
+      <div style={{ marginTop: 13, paddingTop: 11, borderTop: `1px solid ${dash}`, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+        <PartnerLogo reverse={dark} height={13} />
+        <span style={{ width: 1, height: 14, background: dash }} />
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
+          {data.merchantName || "Merchant name"}
         </span>
-        <span style={{ fontSize: 10.5, color: sub, letterSpacing: "0.02em" }}>Works on every UPI app</span>
       </div>
     </div>
   );
@@ -106,9 +124,9 @@ export function Standee({ data, surface = "#e9ecf3" }: { data: QrData; surface?:
               <div style={{ position: "absolute", top: -11, right: -11, width: 22, height: 22, borderRadius: "50%", background: surface }} />
               <div style={{ position: "absolute", top: -1, left: 14, right: 14, borderTop: `2px dashed ${dash}` }} />
             </div>
-            <div style={{ background: cardBg, borderRadius: `0 0 ${topRadius}px ${topRadius}px`, padding: "15px 24px 17px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{ background: cardBg, borderRadius: `0 0 ${topRadius}px ${topRadius}px`, padding: "13px 22px 15px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: text, letterSpacing: "0.04em" }}>{data.merchantName}</span>
-              <span style={{ fontSize: 10, color: sub, fontFamily: "monospace" }}>pa: {data.vpa || "your-upi-id"}</span>
+              <span style={{ fontSize: 10, color: sub, fontFamily: "monospace" }}>UPI ID: {data.vpa || "your-upi-id"}</span>
             </div>
           </>
         )}
@@ -121,13 +139,13 @@ export function Standee({ data, surface = "#e9ecf3" }: { data: QrData; surface?:
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// BILLING SCREEN — one-time / per-bill. Fresh code per sale + live countdown.
+// BILLING SCREEN — dynamic / per-bill. Fresh code + fresh reference per sale,
+// live countdown, BHIM|UPI identity in the footer (screen-rendered QR).
 // ══════════════════════════════════════════════════════════════════════════════
 export function BillingScreen({ data }: { data: QrData }) {
   const total = Math.max(1, parseInt(data.timerMinutes || "15")) * 60;
   const [amount, setAmount] = useState("249");
   const [secs, setSecs] = useState(total);
-  const [bill, setBill] = useState(1);
   const [ref, setRef] = useState(() => genQrRef());
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -139,18 +157,19 @@ export function BillingScreen({ data }: { data: QrData }) {
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const expired = secs === 0;
-  const next = () => { setBill(b => b + 1); setRef(genQrRef()); setSecs(total); };
+  const next = () => { setRef(genQrRef()); setSecs(total); };
   const text = upiString({ vpa: data.vpa, name: data.merchantName, amount, ref });
+  const initial = (data.merchantName || "E").trim().charAt(0).toUpperCase();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style={{ width: 286, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 18, padding: 18, boxShadow: "0 16px 30px rgba(15,23,42,0.10)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, color: C.text }}>
-            <span style={{ width: 22, height: 22, borderRadius: 6, background: data.brandColor, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 11 }}>{data.logoLetter || "E"}</span>
+            <span style={{ width: 22, height: 22, borderRadius: 6, background: data.brandColor, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 11 }}>{initial}</span>
             {data.label || "Counter"}
           </span>
-          <span style={{ fontSize: 11, color: C.textFaint, fontFamily: "monospace" }}>Bill #{ref}</span>
+          <span style={{ fontSize: 11, color: C.textFaint, fontFamily: "monospace" }}>ref {ref}</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
@@ -160,28 +179,36 @@ export function BillingScreen({ data }: { data: QrData }) {
           <span style={{ fontSize: 11, color: C.textFaint, marginLeft: "auto" }}>cashier sets</span>
         </div>
 
-        <div style={{ background: "#f7f8fa", border: `1px solid ${C.borderLight}`, borderRadius: 14, padding: 14, display: "flex", justifyContent: "center", opacity: expired ? 0.25 : 1, transition: "opacity 0.2s" }}>
-          <QrSvg text={text} size={150} logoLetter={data.showLogo ? (data.logoLetter || "E") : undefined} logoColor={data.brandColor} />
+        <div style={{ background: "#f7f8fa", border: `1px solid ${C.borderLight}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: expired ? 0.25 : 1, transition: "opacity 0.2s" }}>
+          <QrSvg text={text} size={150} />
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: C.textSecondary }}>
+            UPI ID: <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{data.vpa || "yourbusiness@bank"}</span>
+          </span>
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: C.textSecondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>Scan &amp; Pay with any UPI app</span>
         </div>
 
         <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: expired ? C.redBg : C.blueLight, border: `1px solid ${expired ? C.redMid : C.blueMid}`, borderRadius: 10, padding: 9 }}>
           <Icon name="qr" size={15} color={expired ? C.red : C.blue} />
           <span style={{ fontSize: 13, color: C.textSecondary }}>{expired ? "Expired —" : "Valid for"}</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: secs <= 60 && !expired ? C.red : expired ? C.red : C.blue, fontVariantNumeric: "tabular-nums" }}>{expired ? "regenerate" : fmt(secs)}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: expired ? C.red : secs <= 60 ? C.red : C.blue, fontVariantNumeric: "tabular-nums" }}>{expired ? "regenerate" : fmt(secs)}</span>
         </div>
         <p style={{ fontSize: 11, color: C.textFaint, textAlign: "center", margin: "9px 0 0", lineHeight: 1.5 }}>One-time code — closes on payment or when the timer runs out</p>
 
         <button onClick={next} style={{ marginTop: 13, width: "100%", padding: 12, background: data.brandColor, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
           <Icon name="copy" size={15} color="#fff" /> Generate next payment
         </button>
+
+        <div style={{ marginTop: 13, display: "flex", justifyContent: "center" }}>
+          <BhimUpiLockup height={13} />
+        </div>
       </div>
-      <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>Fresh code each sale — try the timer & “next”.</p>
+      <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>Fresh code + fresh reference each sale — try the timer &amp; "next".</p>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CUSTOMER SCAN — the phone-side flow (scan → pay → done). No menu step.
+// CUSTOMER SCAN — the phone-side flow (scan → pay → done).
 // ══════════════════════════════════════════════════════════════════════════════
 type Phase = "scan" | "pay" | "done";
 export function CustomerScan({ data }: { data: QrData }) {
@@ -197,6 +224,7 @@ export function CustomerScan({ data }: { data: QrData }) {
   };
   const accent = data.brandColor;
   const typeable = data.usage === "reusable" && data.amountMode === "any";
+  const initial = (data.merchantName || "E").trim().charAt(0).toUpperCase();
 
   const runPin = () => { let i = 0; const t = setInterval(() => { i++; setPin(i); if (i >= 4) { clearInterval(t); setTimeout(() => setPhase("done"), 250); } }, 160); };
 
@@ -210,7 +238,7 @@ export function CustomerScan({ data }: { data: QrData }) {
               <p style={{ fontSize: 17, fontWeight: 800, color: C.text, textAlign: "center", margin: "0 0 4px" }}>Scan to pay</p>
               <p style={{ fontSize: 12, color: C.textMuted, textAlign: "center", margin: "0 0 16px" }}>{data.merchantName}</p>
               <div style={{ alignSelf: "center", background: "#fff", padding: 11, borderRadius: 12, border: `1px solid ${C.border}` }}>
-                <QrSvg text={standeeUpi(data)} size={150} logoLetter={data.showLogo ? (data.logoLetter || "E") : undefined} logoColor={accent} />
+                <QrSvg text={standeeUpi(data)} size={150} />
               </div>
               <PhoneBtn accent={accent} onClick={() => setPhase("pay")}>Open in UPI app ↗</PhoneBtn>
             </ScreenWrap>
@@ -219,7 +247,7 @@ export function CustomerScan({ data }: { data: QrData }) {
             <ScreenWrap appLabel="PhonePe · Confirm payment">
               <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>{data.logoLetter || "E"}</div>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>{initial}</div>
                   <div><div style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{data.merchantName}</div><div style={{ fontSize: 10.5, color: C.textFaint }}>{data.vpa}</div></div>
                 </div>
                 <div style={{ textAlign: "center", padding: "16px 0 6px" }}>
