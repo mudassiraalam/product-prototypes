@@ -1,16 +1,32 @@
 "use client";
 import { useState, useEffect } from "react";
-import { C, radius, shadow } from "@/components/payment-pages/tokens";
-import { Icon, IconName } from "@/components/payment-pages/icons";
+import { C, radius } from "@/components/payment-pages/tokens";
+import { Icon } from "@/components/payment-pages/icons";
 import { Btn } from "@/components/payment-pages/primitives";
 import {
   QrData, DEFAULT_QR, getQrSteps, validateQr, QrValidationError,
-  StepQrSetup, StepQrDesign,
+  StepQrSetup, StepQrDesign, StepQrCollect,
 } from "./qr-wizard-steps";
 import { QrPreview, PreviewDevice } from "./qr-preview";
 import { upiString, downloadQrPng } from "./qr-mock-data";
 
-const primaryDevice = (d: QrData): PreviewDevice => (d.usage === "onetime" ? "billing" : "standee");
+// One preview surface per QR object — no toggle. The payer's post-scan screen
+// belongs to THEIR UPI app (we don't control it), so we don't mock it; the one
+// thing we do control — whether the amount arrives pre-filled — is a line of
+// helper text under the preview.
+const primaryDevice = (d: QrData): PreviewDevice => (d.usage === "onetime" ? "collect" : "standee");
+
+const amountHelper = (d: QrData): string => {
+  if (d.usage === "onetime") {
+    const n = parseFloat(d.oneTimeAmount || "0");
+    return n > 0 ? `Amount pre-filled in the payer's app: ₹${n.toLocaleString("en-IN")} · one payment` : "Amount pre-filled in the payer's app · one payment";
+  }
+  if (d.amountMode === "fixed") {
+    const n = parseFloat(d.fixedAmount || "0");
+    return n > 0 ? `Amount pre-filled in the payer's app: ₹${n.toLocaleString("en-IN")} (encoded in the code — never printed)` : "Amount pre-filled in the payer's app (encoded — never printed)";
+  }
+  return "Customer enters the amount in their UPI app";
+};
 
 function QrStepper({ steps, currentStep, onJump }: { steps: { key: string; label: string }[]; currentStep: number; onJump: (i: number) => void }) {
   return (
@@ -39,47 +55,47 @@ function QrStepper({ steps, currentStep, onJump }: { steps: { key: string; label
   );
 }
 
-function QrPreviewPane({ data, device, onDeviceChange }: { data: QrData; device: PreviewDevice; onDeviceChange: (d: PreviewDevice) => void }) {
-  const primary = primaryDevice(data);
-  const primaryLabel = primary === "billing" ? "Billing screen" : "Standee";
-  const primaryIcon: IconName = primary === "billing" ? "monitor" : "qr";
+function QrPreviewPane({ data }: { data: QrData }) {
   return (
     <div style={{ flex: 1, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", background: "#e9ecf3", minWidth: 0 }}>
-      <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-        <div>
+      <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, letterSpacing: "0.07em", textTransform: "uppercase", margin: 0 }}>Live Preview</p>
-          <p style={{ fontSize: 11, color: C.textMuted, margin: "2px 0 0", fontFamily: "monospace" }}>upi://pay → {data.vpa || "your-upi-id"}</p>
+          <p style={{ fontSize: 11, color: C.textMuted, margin: "2px 0 0", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>upi://pay → {data.vpa || "your-upi-id"}</p>
         </div>
-        <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: radius.md, padding: 3 }}>
-          {([{ k: primary, label: primaryLabel, icon: primaryIcon }, { k: "customer" as PreviewDevice, label: "Customer scan", icon: "smartphone" as IconName }]).map(({ k, label, icon }) => (
-            <button key={k} onClick={() => onDeviceChange(k)}
-              style={{ padding: "6px 12px", border: "none", borderRadius: radius.sm, cursor: "pointer", background: device === k ? C.white : "transparent", color: device === k ? C.text : C.textMuted, boxShadow: device === k ? shadow.sm : "none", fontSize: 12, fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <Icon name={icon} size={14} />{label}
-            </button>
-          ))}
-        </div>
+        <span style={{ fontSize: 11.5, color: C.textMuted, background: C.bg, border: `1px solid ${C.borderLight}`, borderRadius: radius.full, padding: "5px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
+          {amountHelper(data)}
+        </span>
       </div>
       <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "36px 20px", minHeight: 0 }}>
-        <QrPreview data={data} device={device} />
+        <QrPreview data={data} device={primaryDevice(data)} />
       </div>
     </div>
   );
 }
 
+// Success: for a one-time QR the live collect card IS the point — countdown
+// running, ready to show or share. For a reusable standee, download/print.
 function QrSuccessScreen({ data, onDone }: { data: QrData; onDone: () => void }) {
-  const link = upiString({ vpa: data.vpa, name: data.merchantName, amount: data.usage === "reusable" && data.amountMode === "fixed" ? data.fixedAmount : undefined });
+  const oneTime = data.usage === "onetime";
+  const link = upiString({
+    vpa: data.vpa, name: data.merchantName,
+    amount: oneTime ? data.oneTimeAmount : data.amountMode === "fixed" ? data.fixedAmount : undefined,
+  });
   const [copied, setCopied] = useState(false);
   const copy = () => { try { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } };
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, background: C.bg, overflow: "auto" }}>
       <div style={{ width: 68, height: 68, borderRadius: "50%", background: C.greenBg, display: "grid", placeItems: "center", marginBottom: 18 }}><Icon name="checkCircle" size={38} color={C.green} /></div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: "0 0 6px", letterSpacing: "-0.01em" }}>Your QR is live</h2>
-      <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 22px", textAlign: "center", maxWidth: 380, lineHeight: 1.6 }}>
-        “{data.label}” is published. {data.usage === "onetime" ? "Open it on your billing screen to start taking payments." : "Download the code to print it, or copy the UPI link — it opens any UPI app directly."}
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: "0 0 6px", letterSpacing: "-0.01em" }}>{oneTime ? "Your one-time QR is live" : "Your QR is live"}</h2>
+      <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 22px", textAlign: "center", maxWidth: 400, lineHeight: 1.6 }}>
+        {oneTime
+          ? `"${data.label}" is collecting now — show this screen to the payer, or copy the UPI link and share it. It closes on payment or expiry.`
+          : `"${data.label}" is published. Download the code to print it, or copy the UPI link — it opens any UPI app directly.`}
       </p>
       <div style={{ marginBottom: 24 }}><QrPreview data={data} device={primaryDevice(data)} /></div>
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="secondary" onClick={() => downloadQrPng(link, data.label || "payment-qr")}><Icon name="download" size={15} /> Download QR (PNG)</Btn>
+        {!oneTime && <Btn variant="secondary" onClick={() => downloadQrPng(link, data.label || "payment-qr")}><Icon name="download" size={15} /> Download QR (PNG)</Btn>}
         <Btn variant="secondary" onClick={copy}><Icon name="copy" size={15} /> {copied ? "Copied!" : "Copy UPI link"}</Btn>
         <Btn variant="primary" onClick={onDone}>Back to dashboard</Btn>
       </div>
@@ -95,17 +111,18 @@ export function QrWizard({
   onSyncState?: (data: QrData, step: number, building: boolean) => void;
 }) {
   const [data, setData] = useState<QrData>(initialData);
-  const [currentStep, setCurrentStep] = useState(Math.min(initialStep, getQrSteps().length - 1));
-  const [device, setDevice] = useState<PreviewDevice>(primaryDevice(initialData));
+  const [currentStep, setCurrentStep] = useState(Math.min(initialStep, getQrSteps(initialData.usage).length - 1));
   const [phase, setPhase] = useState<"wizard" | "success">("wizard");
   const [errors, setErrors] = useState<QrValidationError[]>([]);
 
-  // keep the preview surface valid when usage flips
-  useEffect(() => { setDevice(d => (d === "customer" ? d : primaryDevice(data))); }, [data.usage]);
+  // The wizard BRANCHES after step 1: reusable → Design (a printed thing),
+  // one-time → Amount & validity (you don't design a standee for a 15-minute
+  // code). Clamp the step if usage flips while on step 2.
+  const steps = getQrSteps(data.usage);
+  const totalSteps = steps.length;
+  useEffect(() => { setCurrentStep(s => Math.min(s, getQrSteps(data.usage).length - 1)); }, [data.usage]);
   useEffect(() => { onSyncState?.(data, currentStep, phase === "wizard"); /* eslint-disable-next-line */ }, [data, currentStep, phase]);
 
-  const steps = getQrSteps();
-  const totalSteps = steps.length;
   const canSaveDraft = !!onSaveDraft && data.label.trim().length > 0;
 
   const advance = () => {
@@ -122,7 +139,9 @@ export function QrWizard({
 
   const stepComponents = [
     <StepQrSetup key="setup" data={data} setData={setData} />,
-    <StepQrDesign key="design" data={data} setData={setData} />,
+    data.usage === "reusable"
+      ? <StepQrDesign key="design" data={data} setData={setData} />
+      : <StepQrCollect key="collect" data={data} setData={setData} />,
   ];
 
   return (
@@ -150,11 +169,11 @@ export function QrWizard({
                 style={{ marginLeft: "auto", padding: "9px 18px", background: canSaveDraft ? C.white : C.bg, color: canSaveDraft ? C.blue : C.textFaint, border: `1.5px solid ${canSaveDraft ? C.blueMid : C.border}`, borderRadius: radius.md, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: canSaveDraft ? "pointer" : "not-allowed" }}>Save as Draft</button>
             )}
             <div style={{ marginLeft: onSaveDraft ? 0 : "auto" }}>
-              <Btn variant="primary" onClick={advance}>{currentStep === totalSteps - 1 ? "Publish QR" : "Continue →"}</Btn>
+              <Btn variant="primary" onClick={advance}>{currentStep === totalSteps - 1 ? (data.usage === "onetime" ? "Generate QR" : "Publish QR") : "Continue →"}</Btn>
             </div>
           </div>
         </div>
-        <QrPreviewPane data={data} device={device} onDeviceChange={setDevice} />
+        <QrPreviewPane data={data} />
       </div>
     </div>
   );
