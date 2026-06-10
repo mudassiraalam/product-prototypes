@@ -12,7 +12,7 @@ import { qrToWizardData, wizardDataToQr } from "./qr-mappers";
 
 type Screen = "dashboard" | "wizard" | "detail";
 
-const linkFor = (q: QrCode) => upiString({ vpa: q.vpa, name: q.merchantName, ref: q.reference, amount: q.amountMode === "fixed" && q.usage === "reusable" ? String(q.amount).replace(/[^\d.]/g, "") : undefined });
+const linkFor = (q: QrCode) => upiString({ vpa: q.vpa, name: q.merchantName, ref: q.reference, amount: q.amountValue ? String(q.amountValue) : undefined });
 
 export function QrApp({ onNavigateProduct }: { onNavigateProduct: (key: string) => void }) {
   const [codes, setCodes] = useState<QrCode[]>(INITIAL_QRS);
@@ -36,7 +36,7 @@ export function QrApp({ onNavigateProduct }: { onNavigateProduct: (key: string) 
     setSnapshot(JSON.stringify(data)); setSessionKey(k => k + 1); setScreen("wizard");
   };
   const startCreate = () => beginSession(null);
-  const startEdit = (qr: QrCode) => beginSession(qr);
+  const startEdit = (qr: QrCode) => { if (qr.origin === "api") { setSelected(qr); setScreen("detail"); return; } beginSession(qr); };
   const exitToDashboard = () => { setEditing(null); setSelected(null); setLive({ data: DEFAULT_QR, step: 0, building: false }); setSnapshot(""); setScreen("dashboard"); };
 
   const genId = () => "QR-ENK-" + Math.random().toString(36).slice(2, 8).toUpperCase();
