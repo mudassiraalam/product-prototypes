@@ -3,8 +3,7 @@ import { useState } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Modal, StatusBadge, Btn, Inp, Toggle, SegmentedControl } from "./primitives";
 import { Icon, IconName } from "./icons";
-import { PaymentPage } from "./mock-data";
-import { TRANSACTIONS } from "./mock-data";
+import { PaymentPage, Submission, PAGE_SUBMISSIONS } from "./mock-data";
 import { PagePreview } from "./page-preview";
 import { WizardData } from "./wizard-steps";
 import { pageToWizardData } from "./page-mappers";
@@ -136,81 +135,145 @@ function ShareModal({ page, onClose }: { page: PaymentPage; onClose: () => void 
   );
 }
 
-// ── Transactions Modal ─────────────────────────────────────────────────────────
-function TransactionsModal({ page, onClose }: { page: PaymentPage; onClose: () => void }) {
+// ── Submissions tab ─────────────────────────────────────────────────────────────
+// One row per payment attempt. The first four columns are fixed; everything
+// after is generated from the page's customerFields (the form the merchant
+// built in wizard Step 2), so the form builder and this view stay connected.
+// Records are payment-linked only — abandoned forms are not captured.
+function SubmissionsTab({ page, fieldLabels, submissions }: {
+  page: PaymentPage; fieldLabels: string[]; submissions: Submission[];
+}) {
   const [selected, setSelected] = useState<string[]>([]);
-  const allIds = TRANSACTIONS.map(t => t.id);
-  const allSelected = selected.length === allIds.length && allIds.length > 0;
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const filtered = submissions.filter(sub => {
+    const q = search.toLowerCase();
+    const matchSearch = !q
+      || sub.id.toLowerCase().includes(q)
+      || Object.values(sub.responses).some(v => v.toLowerCase().includes(q));
+    const matchStatus = statusFilter === "All" || sub.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const allIds = filtered.map(t => t.id);
+  const allSelected = selected.length > 0 && allIds.every(id => selected.includes(id));
   const toggle = (id: string) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   const toggleAll = () => setSelected(allSelected ? [] : allIds);
-  // Refunds only apply to captured/successful transactions.
-  const refundableSelected = TRANSACTIONS.filter(t => selected.includes(t.id) && t.status === "Success").length;
+  // Refunds only apply to captured/successful payments.
+  const refundableSelected = filtered.filter(t => selected.includes(t.id) && t.status === "Success").length;
+
+  // Total on record can exceed the seeded rows (the stats card counts all-time).
+  const totalCount = Math.max(page.payments, submissions.length);
+
+  if (submissions.length === 0) {
+    return (
+      <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "56px 24px", textAlign: "center" }}>
+        <p style={{ margin: "0 0 10px", color: C.textFaint, display: "flex", justifyContent: "center" }}><Icon name="receipt" size={30} /></p>
+        <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: "0 0 4px" }}>No submissions yet</p>
+        <p style={{ fontSize: 13, color: C.textMuted, margin: 0, lineHeight: 1.6 }}>
+          When customers pay through this page, their payment and form responses appear here.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <Modal title="Transactions" subtitle={`${page.title} · ${TRANSACTIONS.length} records`} onClose={onClose} width={720} noPad>
-      <div style={{ padding: "0 0 16px" }}>
-        {/* Toolbar — turns into a bulk-action bar once rows are selected */}
-        <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: selected.length ? C.blueLight : "transparent", minHeight: 52 }}>
-          {selected.length > 0 ? (
-            <>
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.blueDark }}>{selected.length} selected</span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={{ fontSize: 12.5, color: C.blueDark, background: C.white, border: `1px solid ${C.blueMid}`, borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Export selected</button>
-                <button
-                  disabled={refundableSelected === 0}
-                  title={refundableSelected === 0 ? "Only successful payments can be refunded" : undefined}
-                  style={{ fontSize: 12.5, color: refundableSelected ? C.white : C.textFaint, background: refundableSelected ? C.red : C.redBg, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: refundableSelected ? "pointer" : "not-allowed", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Icon name="refresh" size={14} /> Initiate refund{refundableSelected ? ` (${refundableSelected})` : ""}
-                </button>
-                <button onClick={() => setSelected([])} style={{ fontSize: 12.5, color: C.textMuted, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>Clear</button>
+    <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden" }}>
+      {/* Toolbar — turns into a bulk-action bar once rows are selected */}
+      <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, background: selected.length ? C.blueLight : "transparent", minHeight: 56, flexWrap: "wrap" }}>
+        {selected.length > 0 ? (
+          <>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.blueDark }}>{selected.length} selected</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ fontSize: 12.5, color: C.blueDark, background: C.white, border: `1px solid ${C.blueMid}`, borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Export selected</button>
+              <button
+                disabled={refundableSelected === 0}
+                title={refundableSelected === 0 ? "Only successful payments can be refunded" : undefined}
+                style={{ fontSize: 12.5, color: refundableSelected ? C.white : C.textFaint, background: refundableSelected ? C.red : C.redBg, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: refundableSelected ? "pointer" : "not-allowed", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Icon name="refresh" size={14} /> Initiate refund{refundableSelected ? ` (${refundableSelected})` : ""}
+              </button>
+              <button onClick={() => setSelected([])} style={{ fontSize: 12.5, color: C.textMuted, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>Clear</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 0 }}>
+              <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.textFaint, display: "inline-flex" }}><Icon name="search" size={14} /></span>
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Search payment ID or responses..."
+                  style={{ width: "100%", padding: "8px 12px 8px 30px", border: `1.5px solid ${C.border}`, borderRadius: radius.md, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", background: C.white }} />
               </div>
-            </>
-          ) : (
-            <>
-              <span style={{ background: C.greenBg, color: C.green, borderRadius: radius.full, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>• Active</span>
-              <button style={{ fontSize: 12, color: C.blue, background: C.blueLight, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Export CSV</button>
-            </>
-          )}
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                style={{ padding: "8px 10px", border: `1.5px solid ${C.border}`, borderRadius: radius.md, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.white, color: C.textSecondary, cursor: "pointer" }}>
+                <option value="All">All statuses</option>
+                <option value="Success">Success</option>
+                <option value="Failed">Failed</option>
+                <option value="Refunded">Refunded</option>
+              </select>
+            </div>
+            <button style={{ fontSize: 12, color: C.blue, background: C.blueLight, border: "none", borderRadius: radius.sm, padding: "8px 12px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}><Icon name="download" size={14} /> Export CSV</button>
+          </>
+        )}
+      </div>
+
+      {/* Table — horizontal scroll absorbs however many form-field columns exist */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 560 + fieldLabels.length * 150 }}>
           <thead>
+            {/* Column-group header — payment columns vs form-response columns */}
+            <tr>
+              <th colSpan={5} style={{ padding: "6px 16px", fontSize: 10, fontWeight: 700, color: C.textFaint, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.07em", background: C.bg, borderBottom: `1px solid ${C.border}` }}>Payment</th>
+              <th colSpan={fieldLabels.length} style={{ padding: "6px 16px", fontSize: 10, fontWeight: 700, color: C.blueDark, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.07em", background: C.blueLight, borderBottom: `1px solid ${C.border}` }}>Form responses</th>
+            </tr>
             <tr style={{ background: C.bg }}>
               <th style={{ padding: "10px 16px", width: 36 }}>
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ cursor: "pointer", width: 15, height: 15 }} />
               </th>
-              {["Transaction ID", "Customer", "Amount", "Status", "Date", ""].map(h => (
-                <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+              {["Payment ID", "Date", "Amount", "Status", ...fieldLabels].map(h => (
+                <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {TRANSACTIONS.map(txn => {
-              const on = selected.includes(txn.id);
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5 + fieldLabels.length} style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: C.textMuted }}>
+                  No submissions match your filters
+                </td>
+              </tr>
+            ) : filtered.map(sub => {
+              const on = selected.includes(sub.id);
               return (
-                <tr key={txn.id} style={{ borderTop: `1px solid ${C.borderLight}`, background: on ? C.blueLight : "transparent" }}
+                <tr key={sub.id} style={{ borderTop: `1px solid ${C.borderLight}`, background: on ? C.blueLight : "transparent" }}
                   onMouseEnter={e => { if (!on) e.currentTarget.style.background = "#fafbfd"; }}
                   onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
                   <td style={{ padding: "12px 16px" }}>
-                    <input type="checkbox" checked={on} onChange={() => toggle(txn.id)} style={{ cursor: "pointer", width: 15, height: 15 }} />
+                    <input type="checkbox" checked={on} onChange={() => toggle(sub.id)} style={{ cursor: "pointer", width: 15, height: 15 }} />
                   </td>
-                  <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: C.textMuted }}>{txn.id}</td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: "0 0 2px" }}>{txn.customer}</p>
-                    <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{txn.email}</p>
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 700, color: C.text }}>{txn.amount}</td>
-                  <td style={{ padding: "12px 16px" }}><StatusBadge status={txn.status} /></td>
-                  <td style={{ padding: "12px 16px", fontSize: 12, color: C.textFaint }}>{txn.date}</td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <button style={{ fontSize: 12, color: C.blue, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>Receipt</button>
-                  </td>
+                  <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: C.textMuted, whiteSpace: "nowrap" }}>{sub.id}</td>
+                  <td style={{ padding: "12px 16px", fontSize: 12, color: C.textFaint, whiteSpace: "nowrap" }}>{sub.date}</td>
+                  <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap" }}>{sub.amount}</td>
+                  <td style={{ padding: "12px 16px" }}><StatusBadge status={sub.status} /></td>
+                  {fieldLabels.map(label => (
+                    <td key={label} style={{ padding: "12px 16px", fontSize: 13, color: sub.responses[label] ? C.textSecondary : C.textFaint, whiteSpace: "nowrap", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {sub.responses[label] || "—"}
+                    </td>
+                  ))}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-    </Modal>
+
+      {/* Footer */}
+      <div style={{ padding: "10px 18px", borderTop: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: C.textFaint }}>Showing {filtered.length} of {totalCount.toLocaleString()} submissions</span>
+        <span style={{ fontSize: 12, color: C.textMuted }}>‹ 1 ›</span>
+      </div>
+    </div>
   );
 }
 
@@ -289,7 +352,8 @@ function RedirectModal({ page, data, onClose }: { page: PaymentPage; data: Wizar
 // ── Page Detail View ───────────────────────────────────────────────────────────
 export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: PaymentPage; onBack: () => void; onEdit: (page: PaymentPage) => void }) {
   const [page] = useState(initialPage);
-  const [activeModal, setActiveModal] = useState<"qr" | "share" | "transactions" | "preview" | "receipt" | "redirect" | null>(null);
+  const [tab, setTab] = useState<"overview" | "submissions">("overview");
+  const [activeModal, setActiveModal] = useState<"qr" | "share" | "preview" | "receipt" | "redirect" | null>(null);
   const stats = [
     { label: "Page Views", value: page.views.toLocaleString(), color: C.blue },
     { label: "Payments", value: page.payments.toLocaleString(), color: C.green },
@@ -299,6 +363,11 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
 
   // Full builder state for this page — drives both the rail preview and the modal.
   const previewData: WizardData = pageToWizardData(page);
+
+  // Submissions for this page, with table columns generated from the page's
+  // own form fields. Pages created in-session have no records yet.
+  const submissions: Submission[] = PAGE_SUBMISSIONS[page.id] ?? [];
+  const fieldLabels = previewData.customerFields.map(f => f.label);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
@@ -327,14 +396,42 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
             <Btn variant="ghost" onClick={() => setActiveModal("qr")}>QR Code</Btn>
             <Btn variant="ghost" onClick={() => setActiveModal("share")}>Share</Btn>
             <Btn variant="secondary" onClick={() => onEdit(page)}>Edit Page</Btn>
-            <Btn variant="primary" onClick={() => setActiveModal("transactions")}>View Transactions</Btn>
+            <Btn variant="primary" onClick={() => setTab("submissions")}>View Submissions</Btn>
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 22 }}>
+          {([
+            { key: "overview" as const, label: "Overview" },
+            { key: "submissions" as const, label: "Submissions" },
+          ]).map(t => {
+            const active = tab === t.key;
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit",
+                fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted,
+                borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6,
+              }}>
+                {t.label}
+                {t.key === "submissions" && (
+                  <span style={{ fontSize: 11, fontWeight: 700, background: active ? C.blueLight : C.bg, color: active ? C.blueDark : C.textMuted, borderRadius: radius.full, padding: "1px 8px" }}>
+                    {Math.max(page.payments, submissions.length).toLocaleString()}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div style={{ flex: 1, padding: "24px 32px", display: "flex", gap: 24 }}>
-        {/* Left: stats + transactions preview */}
+        {/* Left: per-tab content */}
         <div style={{ flex: 1, minWidth: 0 }}>
+          {tab === "submissions" ? (
+            <SubmissionsTab page={page} fieldLabels={fieldLabels} submissions={submissions} />
+          ) : (
+          <>
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 22 }}>
             {stats.map(s => (
@@ -345,15 +442,20 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
             ))}
           </div>
 
-          {/* Recent Transactions */}
+          {/* Recent submissions */}
           <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden" }}>
             <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: 0 }}>Recent Transactions</p>
-              <button onClick={() => setActiveModal("transactions")}
+              <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: 0 }}>Recent Submissions</p>
+              <button onClick={() => setTab("submissions")}
                 style={{ fontSize: 12, color: C.blue, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>
                 View all →
               </button>
             </div>
+            {submissions.length === 0 ? (
+              <p style={{ padding: "22px 18px", fontSize: 13, color: C.textMuted, margin: 0, textAlign: "center" }}>
+                No submissions yet — they appear here once customers start paying.
+              </p>
+            ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: C.bg }}>
@@ -363,19 +465,20 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
                 </tr>
               </thead>
               <tbody>
-                {TRANSACTIONS.slice(0, 3).map(txn => (
-                  <tr key={txn.id} style={{ borderTop: `1px solid ${C.borderLight}` }}>
+                {submissions.slice(0, 3).map(sub => (
+                  <tr key={sub.id} style={{ borderTop: `1px solid ${C.borderLight}` }}>
                     <td style={{ padding: "11px 16px" }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: "0 0 1px" }}>{txn.customer}</p>
-                      <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{txn.email}</p>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: "0 0 1px" }}>{sub.responses["Full Name"] || sub.responses[fieldLabels[0]] || "—"}</p>
+                      <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{sub.responses["Email Address"] || sub.id}</p>
                     </td>
-                    <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 700, color: C.text }}>{txn.amount}</td>
-                    <td style={{ padding: "11px 16px" }}><StatusBadge status={txn.status} /></td>
-                    <td style={{ padding: "11px 16px", fontSize: 12, color: C.textFaint }}>{txn.date}</td>
+                    <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 700, color: C.text }}>{sub.amount}</td>
+                    <td style={{ padding: "11px 16px" }}><StatusBadge status={sub.status} /></td>
+                    <td style={{ padding: "11px 16px", fontSize: 12, color: C.textFaint }}>{sub.date}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
           </div>
 
           {/* Quick actions */}
@@ -395,6 +498,8 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
               </div>
             ))}
           </div>
+          </>
+          )}
         </div>
 
         {/* Right: live preview */}
@@ -417,7 +522,6 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
       {/* Modals */}
       {activeModal === "qr" && <QRModal page={page} onClose={() => setActiveModal(null)} />}
       {activeModal === "share" && <ShareModal page={page} onClose={() => setActiveModal(null)} />}
-      {activeModal === "transactions" && <TransactionsModal page={page} onClose={() => setActiveModal(null)} />}
       {activeModal === "preview" && <PreviewModal page={page} data={previewData} onClose={() => setActiveModal(null)} />}
       {activeModal === "receipt" && <ReceiptModal page={page} data={previewData} onClose={() => setActiveModal(null)} />}
       {activeModal === "redirect" && <RedirectModal page={page} data={previewData} onClose={() => setActiveModal(null)} />}
