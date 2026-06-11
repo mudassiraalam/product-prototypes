@@ -2,17 +2,14 @@ import type { WizardData } from "./wizard-steps";
 
 export type PageStatus = "Active" | "Inactive" | "Draft" | "Expired" | "Archived";
 
-// Primary type — matches the 2 creation flows.
 // Sub-categories (Donation / Event Tickets / Fixed Price / etc.) are derived
 // from amountType + isDonation + itemsAreTickets and shown via the row icon,
 // not as a label the merchant explicitly selected.
-export type PageType = "Standard Page" | "Invoice";
 
 export interface PaymentPage {
   id: string;
   title: string;
   slug: string;
-  type: PageType;
   amountType: "fixed" | "customer" | "multiple";
   isDonation?: boolean;
   itemsAreTickets?: boolean;
@@ -36,8 +33,8 @@ export interface PaymentPage {
   lastStep?: number;
 }
 
-// 5 examples — each demonstrates a different page configuration the new
-// 2-flow architecture can produce. Together they exercise every conditional
+// Seed examples — each demonstrates a different page configuration the
+// single-flow architecture can produce. Together they exercise every conditional
 // branch in the wizard (fixed / customer-decides / multiple-items, with the
 // donation and tickets refinements).
 export const INITIAL_PAGES: PaymentPage[] = [
@@ -46,7 +43,6 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-CONF2024",
     title: "Tech Summit 2024 Registration",
     slug: "tech-summit-2024",
-    type: "Standard Page",
     amountType: "multiple",
     itemsAreTickets: true,
     amount: "₹999 – ₹4,999",
@@ -67,7 +63,6 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-DIWALI24",
     title: "Diwali Charity Drive 2024",
     slug: "diwali-charity-2024",
-    type: "Standard Page",
     amountType: "customer",
     isDonation: true,
     amount: "Any amount",
@@ -83,32 +78,11 @@ export const INITIAL_PAGES: PaymentPage[] = [
     description: "Help us bring joy to underprivileged children this Diwali. 80G receipts available.",
   },
 
-  // ── Invoice ─────────────────────────────────────────────────────────────
-  {
-    id: "PP-ENK-VENDOR42",
-    title: "Vendor Invoice — Acme Corp Q4",
-    slug: "vendor-acme-q4-2024",
-    type: "Invoice",
-    amountType: "fixed",
-    amount: "₹85,000",
-    views: 14,
-    payments: 1,
-    revenue: "₹85,000",
-    status: "Active",
-    created: "20 Dec 2024, 14:18",
-    expires: "31 Jan 2025",
-    brandColor: "#1c5af4",
-    buttonLabel: "Pay Invoice",
-    theme: "light",
-    layout: "centered",
-  },
-
   // ── Page · Fixed Price (Fixed) ──────────────────────────────────────────
   {
     id: "PP-ENK-COURSE01",
     title: "React Masterclass — Jan Batch",
     slug: "react-masterclass-jan",
-    type: "Standard Page",
     amountType: "fixed",
     amount: "₹4,999",
     views: 672,
@@ -128,7 +102,6 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-MERCH05",
     title: "EnKash Branded Merchandise",
     slug: "enkash-merch",
-    type: "Standard Page",
     amountType: "multiple",
     amount: "₹499 – ₹2,499",
     views: 234,
@@ -148,7 +121,6 @@ export const INITIAL_PAGES: PaymentPage[] = [
     id: "PP-ENK-CONF2023",
     title: "Tech Summit 2023 (Archived)",
     slug: "tech-summit-2023",
-    type: "Standard Page",
     amountType: "multiple",
     itemsAreTickets: true,
     amount: "₹799 – ₹3,999",
@@ -196,10 +168,75 @@ export const DASHBOARD_METRICS = {
   revenueTrend: [28, 22, 40, 32, 50, 42, 60],
 } as const;
 
-export const TRANSACTIONS = [
-  { id: "TXN-001", customer: "Rahul Sharma", email: "rahul@example.com", amount: "₹2,999", status: "Success", date: "28 Dec 2024, 11:22" },
-  { id: "TXN-002", customer: "Priya Mehta", email: "priya.m@gmail.com", amount: "₹2,999", status: "Success", date: "27 Dec 2024, 15:07" },
-  { id: "TXN-003", customer: "Arjun Nair", email: "arjun.nair@corp.in", amount: "₹2,999", status: "Failed", date: "26 Dec 2024, 09:55" },
-  { id: "TXN-004", customer: "Sneha Patel", email: "sneha@startup.io", amount: "₹2,999", status: "Success", date: "25 Dec 2024, 20:10" },
-  { id: "TXN-005", customer: "Karan Gupta", email: "karan.g@outlook.com", amount: "₹2,999", status: "Refunded", date: "24 Dec 2024, 13:45" },
-];
+// ──────────────────────────────────────────────────────────────────────────────
+// Per-page submissions — one record per payment attempt, carrying the customer's
+// form responses. `responses` is keyed by the field LABELS the merchant set in
+// the wizard (Step 2), which is what lets the detail view build its columns
+// dynamically from `customerFields`. Records exist only for payment attempts —
+// abandoned forms are not captured. Pages created in-session start empty.
+// In production this comes from the payments service joined with form data.
+// ──────────────────────────────────────────────────────────────────────────────
+export interface Submission {
+  id: string;                          // PG payment id
+  date: string;
+  amount: string;
+  status: "Success" | "Failed" | "Refunded";
+  responses: Record<string, string>;   // field label → customer's answer
+}
+
+export const PAGE_SUBMISSIONS: Record<string, Submission[]> = {
+  // Tech Summit — fields: Full Name / Email Address / Phone Number / Company
+  "PP-ENK-CONF2024": [
+    { id: "pay_NkT82mQ1", date: "28 Dec 2024, 11:22", amount: "₹4,999", status: "Success",
+      responses: { "Full Name": "Ananya Iyer", "Email Address": "ananya.iyer@gmail.com", "Phone Number": "98301 22418", "Company": "Flexiloans" } },
+    { id: "pay_NkR55xB7", date: "27 Dec 2024, 18:40", amount: "₹2,499", status: "Success",
+      responses: { "Full Name": "Rohit Bansal", "Email Address": "rohit@bansaltech.in", "Phone Number": "99872 10334", "Company": "Bansal Tech" } },
+    { id: "pay_NkQ19pL3", date: "27 Dec 2024, 09:12", amount: "₹2,499", status: "Failed",
+      responses: { "Full Name": "Megha Joshi", "Email Address": "megha.j@outlook.com", "Phone Number": "91123 87650", "Company": "" } },
+    { id: "pay_NkP74vC9", date: "26 Dec 2024, 21:05", amount: "₹999", status: "Success",
+      responses: { "Full Name": "Arjun Nair", "Email Address": "arjun.nair@corp.in", "Phone Number": "98450 66721", "Company": "Corp.in" } },
+    { id: "pay_NkN12hT6", date: "26 Dec 2024, 10:48", amount: "₹2,499", status: "Success",
+      responses: { "Full Name": "Divya Krishnan", "Email Address": "divya.k@zoho.com", "Phone Number": "97316 44209", "Company": "Zoho" } },
+    { id: "pay_NkM31dF2", date: "25 Dec 2024, 14:51", amount: "₹4,999", status: "Refunded",
+      responses: { "Full Name": "Sahil Khanna", "Email Address": "sahil.k@startup.io", "Phone Number": "97714 50982", "Company": "Startup.io" } },
+  ],
+
+  // Diwali charity — fields: Full Name / Email Address / Phone Number / PAN Number
+  "PP-ENK-DIWALI24": [
+    { id: "pay_NhV61kR8", date: "24 Oct 2024, 19:30", amount: "₹5,000", status: "Success",
+      responses: { "Full Name": "Kavita Reddy", "Email Address": "kavita.reddy@gmail.com", "Phone Number": "98490 31177", "PAN Number": "BHJPR4821K" } },
+    { id: "pay_NhT28wM4", date: "23 Oct 2024, 12:14", amount: "₹1,000", status: "Success",
+      responses: { "Full Name": "Imran Shaikh", "Email Address": "imran.s@yahoo.in", "Phone Number": "90040 78215", "PAN Number": "AKWPS6390D" } },
+    { id: "pay_NhS90bN1", date: "22 Oct 2024, 08:55", amount: "₹2,500", status: "Success",
+      responses: { "Full Name": "Pooja Agarwal", "Email Address": "pooja.agarwal@rediffmail.com", "Phone Number": "93345 12908", "PAN Number": "CMHPA2217F" } },
+    { id: "pay_NhR47cV5", date: "21 Oct 2024, 16:02", amount: "₹500", status: "Failed",
+      responses: { "Full Name": "Nikhil Verma", "Email Address": "nikhil.v@gmail.com", "Phone Number": "98115 90443", "PAN Number": "DKVPV8804M" } },
+    { id: "pay_NhQ16zX3", date: "20 Oct 2024, 20:47", amount: "₹10,000", status: "Success",
+      responses: { "Full Name": "Sunita Menon", "Email Address": "sunita.menon@hotmail.com", "Phone Number": "98952 33860", "PAN Number": "EQMPM5172B" } },
+  ],
+
+  // React Masterclass — fields: Full Name / Email Address / Phone Number
+  "PP-ENK-COURSE01": [
+    { id: "pay_NjK73fG6", date: "18 Dec 2024, 22:10", amount: "₹4,999", status: "Success",
+      responses: { "Full Name": "Rahul Sharma", "Email Address": "rahul@example.com", "Phone Number": "98201 45673" } },
+    { id: "pay_NjJ40rH2", date: "17 Dec 2024, 15:07", amount: "₹4,999", status: "Success",
+      responses: { "Full Name": "Priya Mehta", "Email Address": "priya.m@gmail.com", "Phone Number": "99303 21458" } },
+    { id: "pay_NjH85sJ9", date: "16 Dec 2024, 09:55", amount: "₹4,999", status: "Failed",
+      responses: { "Full Name": "Karan Gupta", "Email Address": "karan.g@outlook.com", "Phone Number": "97689 04312" } },
+    { id: "pay_NjG52tK4", date: "15 Dec 2024, 20:10", amount: "₹4,999", status: "Success",
+      responses: { "Full Name": "Sneha Patel", "Email Address": "sneha@startup.io", "Phone Number": "98760 55291" } },
+  ],
+
+  // Archived 2023 summit — fields match CONF2024 (same fabricated builder state)
+  "PP-ENK-CONF2023": [
+    { id: "pay_MzC18uL7", date: "08 Dec 2023, 13:26", amount: "₹3,999", status: "Success",
+      responses: { "Full Name": "Vikram Singh", "Email Address": "vikram.s@infosys.com", "Phone Number": "98860 17402", "Company": "Infosys" } },
+    { id: "pay_MzB64vM3", date: "07 Dec 2023, 11:03", amount: "₹799", status: "Success",
+      responses: { "Full Name": "Aditi Rao", "Email Address": "aditi.rao@gmail.com", "Phone Number": "90080 63915", "Company": "" } },
+    { id: "pay_MzA29wN8", date: "06 Dec 2023, 17:44", amount: "₹1,999", status: "Refunded",
+      responses: { "Full Name": "Farhan Ali", "Email Address": "farhan.ali@tcs.com", "Phone Number": "98220 84137", "Company": "TCS" } },
+  ],
+
+  // Merch page is a Draft with 0 payments → intentionally no records, which is
+  // what exercises the Submissions empty state.
+};
