@@ -5,8 +5,6 @@ import { Inp, Textarea, Sel, Toggle, ColorPicker, SegmentedControl, InfoBanner, 
 import { Icon } from "./icons";
 import { brandClashes, suggestedShade } from "./color-utils";
 
-export type PageType = "page" | "invoice";
-
 // Unified item shape — covers both "Multiple Items" and "Tickets" cases.
 // When itemsAreTickets is true: capacity is shown, min/max qty are hidden.
 // When itemsAreTickets is false: min/max qty are shown, capacity is hidden.
@@ -24,15 +22,8 @@ export interface MultiItem {
 // Backward-compat alias for any caller still referencing Ticket
 export type Ticket = MultiItem;
 
-export interface LineItem {
-  description: string;
-  quantity: string;
-  unitPrice: string;
-}
-
 export interface WizardData {
   // Common
-  pageType: PageType;
   merchantName: string;
   title: string;
   description: string;
@@ -44,7 +35,7 @@ export interface WizardData {
   productImage: string;
   currency: "INR";
 
-  // Pricing — used when pageType === "page"
+  // Pricing
   amountType: "fixed" | "customer" | "multiple";
   fixedAmount: string;
   minAmount: string;
@@ -62,15 +53,6 @@ export interface WizardData {
   eventDate: string;
   eventTime: string;
   eventVenue: string;
-
-  // Invoice
-  invoiceNumber: string;
-  customerName: string;
-  customerEmail: string;
-  lineItems: LineItem[];
-  taxPercent: string;
-  dueDate: string;
-  invoiceTerms: string;
 
   // Customer fields
   customerFields: { type: string; label: string; optional: boolean }[];
@@ -143,7 +125,6 @@ export const WALLET_PARTNERS = [
 ];
 
 export const DEFAULT_WIZARD: WizardData = {
-  pageType: "page",
   merchantName: "EnKash Demo",
   title: "",
   description: "",
@@ -170,14 +151,6 @@ export const DEFAULT_WIZARD: WizardData = {
   eventDate: "",
   eventTime: "",
   eventVenue: "",
-
-  invoiceNumber: "",
-  customerName: "",
-  customerEmail: "",
-  lineItems: [{ description: "", quantity: "1", unitPrice: "" }],
-  taxPercent: "0",
-  dueDate: "",
-  invoiceTerms: "",
 
   customerFields: [
     { type: "name", label: "Full Name", optional: false },
@@ -930,67 +903,6 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// STEP 1 — Invoice (unchanged data model, kept as its own flow)
-// ──────────────────────────────────────────────────────────────────────────────
-export function StepInvoiceDetails({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
-  const updateLine = (i: number, patch: Partial<LineItem>) => {
-    const arr = [...data.lineItems]; arr[i] = { ...arr[i], ...patch };
-    setData({ ...data, lineItems: arr });
-  };
-  const addLine = () => setData({ ...data, lineItems: [...data.lineItems, { description: "", quantity: "1", unitPrice: "" }] });
-  const removeLine = (i: number) => setData({ ...data, lineItems: data.lineItems.filter((_, idx) => idx !== i) });
-
-  return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Invoice Details</h2>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 22px" }}>Bill a specific client. Auto-generate a tax-compliant invoice.</p>
-
-      <SectionCard title="Invoice Info">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Inp label="Invoice Number" value={data.invoiceNumber} onChange={v => setData({ ...data, invoiceNumber: v })} placeholder="INV-2025-001" required />
-          <Inp label="Due Date" value={data.dueDate} onChange={v => setData({ ...data, dueDate: v })} type="date" required />
-        </div>
-        <Inp label="Invoice Title" value={data.title} onChange={v => setData({ ...data, title: v })} placeholder="e.g. Web Development Services - Q4" required />
-      </SectionCard>
-
-      <SectionCard title="Bill to">
-        <Inp label="Customer Name" value={data.customerName} onChange={v => setData({ ...data, customerName: v })} placeholder="Acme Corp" required />
-        <Inp label="Customer Email" value={data.customerEmail} onChange={v => setData({ ...data, customerEmail: v })} placeholder="billing@acme.com" type="email" required />
-      </SectionCard>
-
-      <SectionCard title="Line Items">
-        {data.lineItems.map((li, i) => (
-          <div key={i} style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: radius.md, padding: "14px 16px", marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, margin: 0 }}>Item {i + 1}</p>
-              {data.lineItems.length > 1 && (
-                <button onClick={() => removeLine(i)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>Remove</button>
-              )}
-            </div>
-            <Inp label="Description" value={li.description} onChange={v => updateLine(i, { description: v })} placeholder="e.g. Website redesign" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 10 }}>
-              <Inp label="Qty" value={li.quantity} onChange={v => updateLine(i, { quantity: v })} placeholder="1" type="number" />
-              <Inp label="Unit Price" value={li.unitPrice} onChange={v => updateLine(i, { unitPrice: v })} placeholder="0" prefix={getSymbol(data.currency)} type="number" />
-            </div>
-          </div>
-        ))}
-        <Btn variant="secondary" size="sm" onClick={addLine}>+ Add another line item</Btn>
-
-        <div style={{ marginTop: 18 }}>
-          <Inp label="Tax Rate (%)" value={data.taxPercent} onChange={v => setData({ ...data, taxPercent: v })} placeholder="18" type="number" suffix="%" hint="Applied on the subtotal of all line items" />
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Terms & Notes">
-        <Textarea label="Terms (optional)" value={data.invoiceTerms} onChange={v => setData({ ...data, invoiceTerms: v })} placeholder="Payment terms, late fees, additional notes..." rows={3} />
-      </SectionCard>
-
-      <PageInfoSection data={data} setData={setData} />
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
 // STEP 2: Customer Fields
 // ──────────────────────────────────────────────────────────────────────────────
 export function StepCustomerFields({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
@@ -1024,9 +936,8 @@ export function StepCustomerFields({ data, setData }: { data: WizardData; setDat
   }, {});
 
   // Determine the role label based on context
-  const isInvoice = data.pageType === "invoice";
-  const role = isInvoice ? "customer" : data.isDonation ? "donor" : data.itemsAreTickets ? "attendee" : "customer";
-  const heading = isInvoice ? "Customer Details" : data.isDonation ? "Donor Details" : data.itemsAreTickets ? "Attendee Details" : "Customer Details";
+  const role = data.isDonation ? "donor" : data.itemsAreTickets ? "attendee" : "customer";
+  const heading = data.isDonation ? "Donor Details" : data.itemsAreTickets ? "Attendee Details" : "Customer Details";
 
   return (
     <div>
@@ -1127,7 +1038,7 @@ export function StepCustomization({ data, setData }: { data: WizardData; setData
         <ColorPicker label="Custom Color" value={data.brandColor} onChange={v => setData({ ...data, brandColor: v })} />
         {showColorHint && (
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 12, padding: "11px 13px", background: "#fef6e7", border: "1px solid #f3d699", borderRadius: radius.md }}>
-            <span style={{ color: "#b45309", flexShrink: 0, marginTop: 1 }}><Icon name="bulb" size={17} /></span>
+            <span style={{ color: "#b45309", flexShrink: 0, marginTop: 1 }}><Icon name="help" size={17} /></span>
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 12.5, color: "#92591a", lineHeight: 1.5, margin: "0 0 10px" }}>
                 This shade is very close to the {themeWord} theme you've selected, so your price and buttons may be hard for customers to see.
@@ -1325,9 +1236,9 @@ export function getSymbol(_currency?: string) {
   return "₹";
 }
 
-export function getStepsForType(type: PageType): { key: string; label: string }[] {
+export function getSteps(): { key: string; label: string }[] {
   return [
-    { key: "details", label: type === "invoice" ? "Invoice Details" : "Page Details" },
+    { key: "details", label: "Page Details" },
     { key: "fields", label: "Customer Fields" },
     { key: "customization", label: "Customization" },
     { key: "settings", label: "Settings & Publish" },
@@ -1352,10 +1263,7 @@ export function validateWizard(data: WizardData): ValidationError[] {
     errors.push({ step: STEP_DETAILS, message: "Add a page title." });
   }
 
-  if (data.pageType === "invoice") {
-    const hasLine = data.lineItems.some(li => li.description.trim() && parseFloat(li.unitPrice || "0") > 0);
-    if (!hasLine) errors.push({ step: STEP_DETAILS, message: "Add at least one invoice line item with a price." });
-  } else if (data.amountType === "fixed") {
+  if (data.amountType === "fixed") {
     if (!(parseFloat(data.fixedAmount || "0") > 0)) {
       errors.push({ step: STEP_DETAILS, message: "Set a fixed amount greater than zero." });
     }
