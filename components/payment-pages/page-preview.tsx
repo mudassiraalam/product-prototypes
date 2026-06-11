@@ -1,10 +1,11 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Icon, EnkashLogo } from "./icons";
 import { adaptBrandColor, rgbString } from "./color-utils";
 import type { WizardData, PaymentMethod } from "./wizard-steps";
 import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
+import { qrMatrix } from "../payment-qr/qr-encoder";
 
 const FONT_MAP = {
   default: "var(--font-inter), 'Inter', system-ui, sans-serif",
@@ -144,20 +145,19 @@ function DesktopPreview(p: PreviewProps) {
           <div style={{ padding: "24px 28px", minWidth: 0 }}>
             {/* ── Offer heading (title lives here, reference-style) ── */}
             <div style={{ marginBottom: 22, display: "flex", gap: 14, alignItems: "flex-start" }}>
-              {data.productImage && data.pageType === "page" && data.amountType === "fixed" && (
+              {data.productImage && data.amountType === "fixed" && (
                 <div style={{ width: 56, height: 56, borderRadius: radius.sm, background: `url(${data.productImage}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
               )}
               <div style={{ minWidth: 0, flex: 1 }}>
                 <p style={{ fontSize: 19, fontWeight: 700, color: text, margin: 0, lineHeight: 1.3, overflowWrap: "break-word", wordBreak: "break-word" }}>
                   {data.title || (
-                    data.pageType === "invoice" ? "Invoice"
-                      : (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
+                    (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
                       : (data.amountType === "multiple" && data.itemsAreTickets) ? "Your Event Name"
                       : "Your Page Title"
                   )}
                 </p>
                 <div style={{ width: 30, height: 3, background: data.brandColor, margin: "10px 0 0" }} />
-                {data.pageType === "page" && data.amountType === "customer" && data.isDonation && (
+                {data.amountType === "customer" && data.isDonation && (
                   <p style={{ fontSize: 11, color: textMuted, margin: "10px 0 0" }}>Every contribution counts</p>
                 )}
                 {data.description && (
@@ -173,20 +173,11 @@ function DesktopPreview(p: PreviewProps) {
               </div>
             )}
 
-            {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
+            {(data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ marginBottom: 22 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Event Info</p>
                 {data.eventDate && <InfoLine icon={<Icon name="calendar" size={13} />} text={`${formatDate(data.eventDate)}${data.eventTime ? ` · ${data.eventTime}` : ""}`} color={text} />}
                 {data.eventVenue && <InfoLine icon={<Icon name="mapPin" size={13} />} text={data.eventVenue} color={text} />}
-              </div>
-            )}
-
-            {data.pageType === "invoice" && (
-              <div style={{ marginBottom: 22 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Invoice Details</p>
-                {data.invoiceNumber && <InfoLine icon="#" text={`Invoice ${data.invoiceNumber}`} color={text} />}
-                {data.dueDate && <InfoLine icon={<Icon name="clock" size={13} />} text={`Due ${formatDate(data.dueDate)}`} color={text} />}
-                {data.customerName && <InfoLine icon={<Icon name="user" size={13} />} text={`Bill to: ${data.customerName}`} color={text} />}
               </div>
             )}
 
@@ -236,10 +227,10 @@ function DesktopPreview(p: PreviewProps) {
             {!data.longDescription && !data.contactEmail && !data.contactPhone && !data.socialTwitter && !data.socialInstagram && !data.socialFacebook && !data.socialLinkedin && !(data as any).galleryImages?.length && (
               <div style={{ background: subtleBg, border: `1px dashed ${border}`, borderRadius: radius.md, padding: "20px 16px", textAlign: "center" }}>
                 <p style={{ margin: "0 0 8px", color: textMuted, display: "flex", justifyContent: "center" }}>
-                  <Icon name={data.pageType === "invoice" ? "receipt" : (data.amountType === "customer" && data.isDonation) ? "donation" : (data.amountType === "multiple" && data.itemsAreTickets) ? "ticket" : "bag"} size={26} />
+                  <Icon name={(data.amountType === "customer" && data.isDonation) ? "donation" : (data.amountType === "multiple" && data.itemsAreTickets) ? "ticket" : "bag"} size={26} />
                 </p>
                 <p style={{ fontSize: 13, fontWeight: 600, color: textMuted, margin: "0 0 4px" }}>
-                  {data.pageType === "invoice" ? "Add notes for your client" : (data.amountType === "customer" && data.isDonation) ? "Add details about your cause" : (data.amountType === "multiple" && data.itemsAreTickets) ? "Tell customers about your event" : "Add info about your product or service"}
+                  {(data.amountType === "customer" && data.isDonation) ? "Add details about your cause" : (data.amountType === "multiple" && data.itemsAreTickets) ? "Tell customers about your event" : "Add info about your product or service"}
                 </p>
                 <p style={{ fontSize: 11, color: textFaint, margin: 0, lineHeight: 1.5 }}>
                   Fill these in Step 1 under <strong>Page Info</strong> — they'll appear here.
@@ -256,7 +247,7 @@ function DesktopPreview(p: PreviewProps) {
           <div style={{ background: p.dark ? panelBg : cardBg, minWidth: 0 }}>
             <div style={{ position: "sticky", top: 16, padding: "24px 28px" }}>
               <BillingPanel
-                data={data} text={text} textMuted={textMuted} textFaint={textFaint}
+                data={data} device="desktop" text={text} textMuted={textMuted} textFaint={textFaint}
                 border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
                 total={total} quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
               />
@@ -353,7 +344,7 @@ function MobilePreview(p: PreviewProps) {
             )}
 
             {/* Event-specific info */}
-            {(data.pageType === "page" && data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
+            {(data.amountType === "multiple" && data.itemsAreTickets) && (data.eventDate || data.eventVenue) && (
               <div style={{ background: subtleBg, borderRadius: radius.sm, padding: "10px 12px", marginBottom: 12, fontSize: 12 }}>
                 {data.eventDate && <p style={{ margin: "0 0 4px", color: text, display: "flex", alignItems: "center", gap: 6 }}><Icon name="calendar" size={12} /> {data.eventDate}{data.eventTime ? ` at ${data.eventTime}` : ""}</p>}
                 {data.eventVenue && <p style={{ margin: 0, color: text, display: "flex", alignItems: "center", gap: 6 }}><Icon name="mapPin" size={12} /> {data.eventVenue}</p>}
@@ -394,7 +385,7 @@ function MobilePreview(p: PreviewProps) {
             <HeaderBlock data={data} cardBg={cardBg} subtleBg={subtleBg} text={text} textMuted={textMuted} border={border} total={total} compact />
             <div style={{ marginTop: 14 }}>
               <BillingPanel
-                data={data} text={text} textMuted={textMuted} textFaint={textFaint}
+                data={data} device="mobile" text={text} textMuted={textMuted} textFaint={textFaint}
                 border={border} subtleBg={subtleBg} onBrand={onBrand} btnRadius={btnRadius}
                 total={total} compact quantities={p.quantities} setQty={p.setQty} dark={p.dark} chosenAmount={p.chosenAmount} setChosenAmount={p.setChosenAmount}
               />
@@ -411,7 +402,7 @@ function MobilePreview(p: PreviewProps) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Header (product / cause / event / invoice)
+// Header (product / cause / event)
 // ──────────────────────────────────────────────────────────────────────────────
 function HeaderBlock({
   data, cardBg, subtleBg, text, textMuted, textFaint, border, total, compact, brandColor,
@@ -422,7 +413,7 @@ function HeaderBlock({
       borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`,
       padding: compact ? "0 16px 12px" : "0 28px 18px", display: "flex", alignItems: "flex-start", gap: compact ? 12 : 16,
     }}>
-      {data.productImage && data.pageType === "page" && data.amountType === "fixed" && (
+      {data.productImage && data.amountType === "fixed" && (
         <div style={{ width: compact ? 44 : 56, height: compact ? 44 : 56, borderRadius: radius.sm, background: `url(${data.productImage}) center/cover`, border: `1px solid ${border}`, flexShrink: 0 }} />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -430,13 +421,12 @@ function HeaderBlock({
         <div style={{ width: 30, height: 3, background: brandColor || data.brandColor, marginBottom: 8 }} />
         <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, color: text, margin: 0, overflowWrap: "break-word", wordBreak: "break-word" }}>
           {data.title || (
-            data.pageType === "invoice" ? "Invoice"
-              : (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
+            (data.amountType === "customer" && data.isDonation) ? "Your Cause Title"
               : (data.amountType === "multiple" && data.itemsAreTickets) ? "Your Event Name"
               : "Your Page Title"
           )}
         </p>
-        {data.pageType === "page" && data.amountType === "customer" && data.isDonation && (
+        {data.amountType === "customer" && data.isDonation && (
           <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>Every contribution counts</p>
         )}
         {data.description && (
@@ -451,9 +441,9 @@ function HeaderBlock({
 // Billing panel — type-aware
 // ──────────────────────────────────────────────────────────────────────────────
 function BillingPanel({
-  data, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty, dark, chosenAmount, setChosenAmount,
+  data, device, text, textMuted, textFaint, border, subtleBg, onBrand, btnRadius, total, compact, quantities, setQty, dark, chosenAmount, setChosenAmount,
 }: {
-  data: WizardData; text: string; textMuted: string; textFaint: string; border: string;
+  data: WizardData; device: "desktop" | "mobile"; text: string; textMuted: string; textFaint: string; border: string;
   subtleBg: string; onBrand: string; btnRadius: number; total: string; compact?: boolean;
   quantities?: Record<number, number>; setQty?: (i: number, delta: number, min?: number, max?: number) => void;
   dark?: boolean; chosenAmount?: string; setChosenAmount?: (v: string) => void;
@@ -480,25 +470,60 @@ function BillingPanel({
   const activeMethod = methods.includes(payMethod) ? payMethod : methods[0];
 
   // Computed states — defensive against any data combo where flags don't match amountType.
-  const isInvoice = data.pageType === "invoice";
-  const isCustomerDecides = data.pageType === "page" && data.amountType === "customer";
+  const isCustomerDecides = data.amountType === "customer";
   const isDonationFlow = isCustomerDecides && data.isDonation;
-  const isMultipleItems = data.pageType === "page" && data.amountType === "multiple";
+  const isMultipleItems = data.amountType === "multiple";
   const isTicketsFlow = isMultipleItems && data.itemsAreTickets;
-  const isFixed = data.pageType === "page" && data.amountType === "fixed";
+  const isFixed = data.amountType === "fixed";
 
   // Label above the pricing panel
-  const amountLabel = isInvoice
-    ? "Amount Due"
-    : isDonationFlow
-      ? "Donation Amount"
-      : isCustomerDecides
-        ? "Choose an amount"
-        : isTicketsFlow
-          ? "Select Tickets"
-          : isMultipleItems
-            ? "Choose items"
-            : "Final Amount";
+  const amountLabel = isDonationFlow
+    ? "Donation Amount"
+    : isCustomerDecides
+      ? "Choose an amount"
+      : isTicketsFlow
+        ? "Select Tickets"
+        : isMultipleItems
+          ? "Choose items"
+          : "Final Amount";
+
+  // ── UPI checkout state ─────────────────────────────────────────────────────
+  // Desktop: a dynamic (amount-attached) QR is generated only when the customer
+  // clicks Pay, then stays valid for 15 minutes — mirroring how PG checkouts
+  // issue per-order QRs with an expiry. Mobile: the customer picks a UPI app
+  // and Pay fires the upi:// intent deep link for that app.
+  const isDesktop = device === "desktop";
+  const [qrState, setQrState] = useState<"locked" | "active" | "expired">("locked");
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [upiApp, setUpiApp] = useState("gpay");
+  const [redirecting, setRedirecting] = useState(false);
+
+  const upiAmount = (total.match(/[\d.,]+/)?.[0] || "").replace(/,/g, "");
+  const upiLink = `upi://pay?pa=enkashdemo@yesb&pn=${encodeURIComponent(data.merchantName || "EnKash Demo")}` +
+    (upiAmount ? `&am=${upiAmount}` : "") + `&cu=INR&tn=${encodeURIComponent(data.title || "Payment")}`;
+
+  // Countdown while the QR is live; expire at zero.
+  useEffect(() => {
+    if (qrState !== "active") return;
+    if (secondsLeft <= 0) { setQrState("expired"); return; }
+    const t = setTimeout(() => setSecondsLeft(n => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [qrState, secondsLeft]);
+
+  // A dynamic QR is fixed-amount — if the payable total changes, the issued QR
+  // is no longer valid, so drop back to the locked state.
+  useEffect(() => {
+    setQrState("locked");
+    setSecondsLeft(0);
+  }, [total]);
+
+  const startQr = () => { setQrState("active"); setSecondsLeft(15 * 60); };
+  const handlePay = () => {
+    if (activeMethod !== "upi") return;
+    if (isDesktop) { startQr(); return; }
+    setRedirecting(true);
+    setTimeout(() => setRedirecting(false), 3200);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -508,13 +533,10 @@ function BillingPanel({
         <div style={{ background: totalBoxBg, border: `1px solid ${totalBoxBorder}`, borderRadius: radius.md, padding: "14px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
             <span style={{ fontSize: 12, color: textMuted, paddingBottom: 3 }}>
-              {isInvoice ? "Total due" : isDonationFlow ? "Your donation" : "Total payable"}
+              {isDonationFlow ? "Your donation" : "Total payable"}
             </span>
             <span style={{ fontSize: 26, fontWeight: 800, color: amountColor, lineHeight: 1 }}>{total}</span>
           </div>
-          {isInvoice && parseFloat(data.taxPercent || "0") > 0 && (
-            <p style={{ fontSize: 11, color: textFaint, margin: "4px 0 0" }}>Incl. {data.taxPercent}% tax</p>
-          )}
         </div>
       </div>
 
@@ -623,27 +645,6 @@ function BillingPanel({
         </div>
       )}
 
-      {/* INVOICE: line items table */}
-      {isInvoice && (
-        <div style={{ border: `1px solid ${border}`, borderRadius: radius.sm, overflow: "hidden" }}>
-          {(data.lineItems.filter(li => li.description).length === 0 ? [{ description: "Service / Product", quantity: "1", unitPrice: "0" }] : data.lineItems).map((li, i) => (
-            <div key={i} style={{ padding: "8px 12px", borderBottom: i < data.lineItems.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
-              <div style={{ flex: 1, color: text }}>
-                {li.description || "—"}
-                <span style={{ color: textFaint, marginLeft: 6 }}>× {li.quantity || "1"}</span>
-              </div>
-              <span style={{ fontWeight: 600, color: text }}>{symbol}{(parseFloat(li.unitPrice || "0") * parseFloat(li.quantity || "1")).toFixed(2)}</span>
-            </div>
-          ))}
-          {parseFloat(data.taxPercent || "0") > 0 && (
-            <div style={{ padding: "8px 12px", background: subtleBg, fontSize: 12, color: textMuted, display: "flex", justifyContent: "space-between" }}>
-              <span>Tax ({data.taxPercent}%)</span>
-              <span>{symbol}{computeTax(data)}</span>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* FIXED AMOUNT — no separate box; the Total card above already shows it */}
 
       {/* Buyer details — real, type-aware inputs */}
@@ -692,19 +693,29 @@ function BillingPanel({
             );
           })}
         </div>
-        <MethodInput
-          method={activeMethod} brand={data.brandColor}
-          banks={data.netbankingBanks} wallets={data.wallets}
-          text={text} textMuted={textMuted} textFaint={textFaint}
-          fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact}
-        />
+        {activeMethod === "upi" ? (
+          <UpiCheckout
+            isDesktop={isDesktop} qrState={qrState} secondsLeft={secondsLeft}
+            upiApp={upiApp} setUpiApp={setUpiApp} redirecting={redirecting}
+            upiLink={upiLink} onRegenerate={startQr}
+            brand={data.brandColor} text={text} textMuted={textMuted} textFaint={textFaint}
+            fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact} dark={dark}
+          />
+        ) : (
+          <MethodInput
+            method={activeMethod} brand={data.brandColor}
+            banks={data.netbankingBanks} wallets={data.wallets}
+            text={text} textMuted={textMuted} textFaint={textFaint}
+            fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact}
+          />
+        )}
       </div>
 
-      {/* Pay button */}
-      <button style={{
+      {/* Pay button — for UPI it generates the QR (desktop) or fires the app intent (mobile) */}
+      <button onClick={handlePay} style={{
         width: "100%", padding: compact ? "12px" : "14px", background: data.brandColor, color: onBrand,
         border: "none", borderRadius: btnRadius, fontSize: compact ? 14 : 15, fontWeight: 700,
-        cursor: "default", fontFamily: "inherit", letterSpacing: "0.01em",
+        cursor: activeMethod === "upi" ? "pointer" : "default", fontFamily: "inherit", letterSpacing: "0.01em",
         boxShadow: `0 6px 18px ${hexAlpha(data.brandColor, 0.32)}`,
         marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
@@ -810,6 +821,165 @@ function BuyerField({
 // ──────────────────────────────────────────────────────────────────────────────
 // Method-specific input shown under the PAY VIA selector
 // ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// UPI checkout — device-aware.
+// Desktop: dynamic per-order QR (encodes the live upi:// intent with the payable
+// amount). Blurred until Pay generates it; valid for 15 minutes, then expires
+// and must be regenerated. Mobile: customer picks a UPI app; Pay deep-links via
+// the same upi:// intent string.
+// ──────────────────────────────────────────────────────────────────────────────
+const UPI_APPS = [
+  { key: "gpay", label: "GPay", logo: "/logos/gpay.svg" },
+  { key: "phonepe", label: "PhonePe", logo: "/logos/phonepe.svg" },
+  { key: "paytm", label: "Paytm", logo: "/logos/paytm.svg" },
+  { key: "bhim", label: "BHIM", logo: "/logos/bhim.svg" },
+];
+
+function UpiQr({ value, size }: { value: string; size: number }) {
+  const matrix = useMemo(() => { try { return qrMatrix(value); } catch { return null; } }, [value]);
+  if (!matrix) return <div style={{ width: size, height: size, background: "#fff", borderRadius: 6 }} />;
+  const n = matrix.length, quiet = 2, dim = n + quiet * 2;
+  let d = "";
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (matrix[y][x]) d += `M${x + quiet} ${y + quiet}h1v1h-1z`;
+  return (
+    <svg viewBox={`0 0 ${dim} ${dim}`} width={size} height={size} shapeRendering="crispEdges" style={{ display: "block", borderRadius: 6 }}>
+      <rect width={dim} height={dim} fill="#ffffff" />
+      <path d={d} fill="#111111" />
+    </svg>
+  );
+}
+
+function VpaInput({ brand, base, pad, fieldBorder, fieldSurface }: {
+  brand: string; base: React.CSSProperties; pad: string; fieldBorder: string; fieldSurface: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, overflow: "hidden", background: fieldSurface }}>
+      <input placeholder="yourname@upi" style={{ ...base, border: "none", borderRadius: 0, flex: 1, minWidth: 0 }} />
+      <span style={{ padding: pad, fontSize: 12, fontWeight: 800, color: brand, borderLeft: `1px solid ${fieldBorder}`, display: "flex", alignItems: "center" }}>UPI</span>
+    </div>
+  );
+}
+
+function UpiCheckout({
+  isDesktop, qrState, secondsLeft, upiApp, setUpiApp, redirecting, upiLink, onRegenerate,
+  brand, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact, dark,
+}: {
+  isDesktop: boolean; qrState: "locked" | "active" | "expired"; secondsLeft: number;
+  upiApp: string; setUpiApp: (k: string) => void; redirecting: boolean; upiLink: string; onRegenerate: () => void;
+  brand: string; text: string; textMuted: string; textFaint: string;
+  fieldSurface: string; fieldBorder: string; subtleBg: string; compact?: boolean; dark?: boolean;
+}) {
+  const pad = compact ? "10px 12px" : "12px 13px";
+  const base: React.CSSProperties = {
+    width: "100%", padding: pad, border: `1px solid ${fieldBorder}`, borderRadius: radius.sm,
+    fontSize: 13, color: text, background: fieldSurface, boxSizing: "border-box", fontFamily: "inherit", outline: "none",
+  };
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
+  const ss = String(secondsLeft % 60).padStart(2, "0");
+
+  const divider = (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0" }}>
+      <div style={{ flex: 1, height: 1, background: fieldBorder }} />
+      <span style={{ fontSize: 11, color: textFaint, fontWeight: 600 }}>or enter UPI ID</span>
+      <div style={{ flex: 1, height: 1, background: fieldBorder }} />
+    </div>
+  );
+
+  // ── Desktop: QR flow ──
+  if (isDesktop) {
+    return (
+      <div>
+        <div style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, background: fieldSurface, padding: "16px 14px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "relative", borderRadius: 6, overflow: "hidden" }}>
+            <div style={{ filter: qrState === "active" ? "none" : "blur(7px)", opacity: qrState === "active" ? 1 : 0.45, transition: "filter 0.3s, opacity 0.3s" }}>
+              <UpiQr value={upiLink} size={152} />
+            </div>
+            {qrState !== "active" && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                {qrState === "locked" ? (
+                  <>
+                    <span style={{ width: 34, height: 34, borderRadius: "50%", background: brand, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="lock" size={15} /></span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: text, textAlign: "center" }}>Click Pay to generate QR</span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: text }}>QR expired</span>
+                    <button onClick={onRegenerate} style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", background: brand, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit" }}>
+                      Regenerate
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6, minHeight: 18 }}>
+            {qrState === "active" ? (
+              <>
+                <Icon name="clock" size={12} />
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: secondsLeft <= 60 ? "#dc2626" : textMuted, fontVariantNumeric: "tabular-nums" }}>
+                  Expires in {mm}:{ss}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: 11, color: textFaint }}>Scan with any UPI app</span>
+            )}
+          </div>
+          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 7 }}>
+            {UPI_APPS.map(a => (
+              <span key={a.key} style={{ height: 16, display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 3, padding: "1px 4px", border: `1px solid ${dark ? "rgba(255,255,255,0.18)" : "#e5e7eb"}` }}>
+                <img src={a.logo} alt={a.label} style={{ height: 11, width: "auto", display: "block" }} />
+              </span>
+            ))}
+          </div>
+        </div>
+        {divider}
+        <VpaInput brand={brand} base={base} pad={pad} fieldBorder={fieldBorder} fieldSurface={fieldSurface} />
+      </div>
+    );
+  }
+
+  // ── Mobile: app intent flow ──
+  if (redirecting) {
+    const app = UPI_APPS.find(a => a.key === upiApp) ?? UPI_APPS[0];
+    return (
+      <div style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, background: fieldSurface, padding: "18px 14px", textAlign: "center" }}>
+        <span style={{ height: 26, display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 4, padding: "3px 8px", border: `1px solid ${dark ? "rgba(255,255,255,0.18)" : "#e5e7eb"}` }}>
+          <img src={app.logo} alt={app.label} style={{ height: 16, width: "auto", display: "block" }} />
+        </span>
+        <p style={{ fontSize: 12.5, fontWeight: 700, color: text, margin: "10px 0 2px" }}>Opening {app.label}…</p>
+        <p style={{ fontSize: 10.5, color: textFaint, margin: 0 }}>Approve the payment in the app</p>
+        <p style={{ fontSize: 9.5, color: textFaint, margin: "8px 0 0", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.5, opacity: 0.8 }}>{upiLink}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+        {UPI_APPS.map(a => {
+          const selected = upiApp === a.key;
+          return (
+            <button key={a.key} onClick={() => setUpiApp(a.key)} style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+              padding: "9px 4px 7px", border: `1.5px solid ${selected ? brand : fieldBorder}`,
+              background: selected ? hexAlpha(brand, 0.07) : fieldSurface,
+              borderRadius: radius.sm, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+            }}>
+              <span style={{ height: 20, display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 3, padding: "2px 5px", border: `1px solid ${dark ? "rgba(255,255,255,0.18)" : "#eceef2"}` }}>
+                <img src={a.logo} alt={a.label} style={{ height: 13, width: "auto", display: "block" }} />
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: selected ? brand : textMuted }}>{a.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {divider}
+      <VpaInput brand={brand} base={base} pad={pad} fieldBorder={fieldBorder} fieldSurface={fieldSurface} />
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 function MethodInput({
   method, brand, banks, wallets, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
 }: {
@@ -823,14 +993,6 @@ function MethodInput({
     fontSize: 13, color: text, background: fieldSurface, boxSizing: "border-box", fontFamily: "inherit", outline: "none",
   };
 
-  if (method === "upi") {
-    return (
-      <div style={{ display: "flex", alignItems: "stretch", border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, overflow: "hidden", background: fieldSurface }}>
-        <input placeholder="yourname@upi" style={{ ...base, border: "none", borderRadius: 0, flex: 1, minWidth: 0 }} />
-        <span style={{ padding: pad, fontSize: 12, fontWeight: 800, color: brand, borderLeft: `1px solid ${fieldBorder}`, display: "flex", alignItems: "center" }}>UPI</span>
-      </div>
-    );
-  }
   if (method === "cards") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -929,13 +1091,7 @@ function computeTotalLive(data: WizardData, quantities: Record<number, number>, 
 function computeTotal(data: WizardData): string {
   const sym = getSymbol(data.currency);
 
-  if (data.pageType === "invoice") {
-    const sub = data.lineItems.reduce((acc, li) => acc + parseFloat(li.unitPrice || "0") * parseFloat(li.quantity || "1"), 0);
-    const tax = sub * (parseFloat(data.taxPercent || "0") / 100);
-    return `${sym}${(sub + tax).toFixed(2)}`;
-  }
-
-  // Payment page — branch on amountType (the source of truth)
+  // Branch on amountType (the source of truth)
   if (data.amountType === "fixed") return `${sym}${data.fixedAmount || "0"}`;
   if (data.amountType === "customer") return `${sym}—`;
   if (data.amountType === "multiple") {
@@ -947,12 +1103,6 @@ function computeTotal(data: WizardData): string {
     return sum > 0 ? `${sym}${sum.toFixed(2)}` : `${sym}—`;
   }
   return `${sym}0`;
-}
-
-function computeTax(data: WizardData): string {
-  const sub = data.lineItems.reduce((acc, li) => acc + parseFloat(li.unitPrice || "0") * parseFloat(li.quantity || "1"), 0);
-  const tax = sub * (parseFloat(data.taxPercent || "0") / 100);
-  return tax.toFixed(2);
 }
 
 function formatDate(iso: string): string {
