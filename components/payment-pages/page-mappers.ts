@@ -6,7 +6,7 @@
 // what lets "Edit Page" reopen a convincing, pre-filled wizard for the demo.
 // ──────────────────────────────────────────────────────────────────────────────
 import type { PaymentPage, PageStatus } from "./mock-data";
-import type { WizardData, MultiItem, LineItem } from "./wizard-steps";
+import type { WizardData, MultiItem } from "./wizard-steps";
 import { DEFAULT_WIZARD } from "./wizard-steps";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -25,11 +25,6 @@ function nowStamp(): string {
 
 // ── Display amount derived from builder state (for the dashboard row) ──────────
 function amountLabel(data: WizardData): string {
-  if (data.pageType === "invoice") {
-    const sub = data.lineItems.reduce((a, li) => a + num(li.quantity) * num(li.unitPrice), 0);
-    const tax = sub * (num(data.taxPercent) / 100);
-    return inr(sub + tax);
-  }
   if (data.amountType === "fixed") return inr(num(data.fixedAmount));
   if (data.amountType === "customer") {
     if (data.isDonation) return "Any amount";
@@ -54,8 +49,7 @@ export function wizardDataToPage(
     id: opts.id,
     title: data.title || "Untitled page",
     slug: data.pageSlug || slugify(data.title) || "untitled",
-    type: data.pageType === "invoice" ? "Invoice" : "Standard Page",
-    amountType: data.pageType === "invoice" ? "fixed" : data.amountType,
+    amountType: data.amountType,
     isDonation: data.isDonation,
     itemsAreTickets: data.itemsAreTickets,
     amount: amountLabel(data),
@@ -84,7 +78,6 @@ export function pageToWizardData(page: PaymentPage): WizardData {
   const base: WizardData = {
     ...DEFAULT_WIZARD,
     merchantName: "EnKash Demo",
-    pageType: page.type === "Invoice" ? "invoice" : "page",
     title: page.title,
     pageSlug: page.slug,
     slugTouched: true,
@@ -161,27 +154,6 @@ export function pageToWizardData(page: PaymentPage): WizardData {
           { type: "pan", label: "PAN Number", optional: false },
         ],
         buttonLabel: page.buttonLabel || "Donate Now",
-      };
-
-    case "PP-ENK-VENDOR42":
-      return {
-        ...base,
-        pageType: "invoice",
-        invoiceNumber: "INV-ACME-Q4-2024",
-        customerName: "Acme Corp Pvt Ltd",
-        customerEmail: "accounts@acmecorp.in",
-        taxPercent: "18",
-        dueDate: "2025-01-31",
-        invoiceTerms: "Payment due within 30 days. Please reference the invoice number with your transfer.",
-        lineItems: [
-          { description: "Consulting services — Q4 2024", quantity: "1", unitPrice: "60000" },
-          { description: "Priority support retainer", quantity: "1", unitPrice: "12000" },
-        ] as LineItem[],
-        customerFields: [
-          { type: "name", label: "Full Name", optional: false },
-          { type: "email", label: "Email Address", optional: false },
-          { type: "gstin", label: "GSTIN", optional: true },
-        ],
       };
 
     case "PP-ENK-COURSE01":
