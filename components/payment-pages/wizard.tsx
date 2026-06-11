@@ -5,95 +5,20 @@ import { Btn } from "./primitives";
 import { Icon, IconName } from "./icons";
 import { PagePreview } from "./page-preview";
 import {
-  WizardData, DEFAULT_WIZARD, PageType, getStepsForType,
-  StepPageDetails, StepInvoiceDetails,
+  WizardData, DEFAULT_WIZARD, getSteps,
+  StepPageDetails,
   StepCustomerFields, StepCustomization, StepSettings,
   validateWizard, ValidationError,
 } from "./wizard-steps";
-
-const PAGE_TYPES: { key: PageType; icon: IconName; title: string; tagline: string; desc: string; color: string }[] = [
-  {
-    key: "page", icon: "page", title: "Standard Page",
-    tagline: "Accept payments via a shareable link",
-    desc: "One flow that adapts to what you're charging for — products, services, donations, events, fees. The page builds itself around your pricing choice.",
-    color: "#1c5af4",
-  },
-  {
-    key: "invoice", icon: "invoice", title: "Invoice",
-    tagline: "Bill a specific client",
-    desc: "Tax-compliant invoice with line items, due date, and customer billing details. Best when you already know who you're billing.",
-    color: "#7c3aed",
-  },
-];
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Type Selection - 4 cards in a single row
-// ──────────────────────────────────────────────────────────────────────────────
-function TypeSelector({ selected, onSelect }: { selected: PageType | null; onSelect: (key: PageType) => void }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 24, width: "100%" }}>
-      {PAGE_TYPES.map(pt => (
-        <TypeOption key={pt.key} pt={pt} selected={selected === pt.key} onClick={() => onSelect(pt.key)} />
-      ))}
-    </div>
-  );
-}
-
-function TypeOption({ pt, selected, onClick }: { pt: typeof PAGE_TYPES[number]; selected: boolean; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  const active = selected || hovered;
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        border: `2px solid ${active ? pt.color : C.border}`, borderRadius: radius.lg,
-        padding: "28px 26px", cursor: "pointer", background: active ? hexAlpha(pt.color, 0.05) : C.white,
-        transition: "all 0.2s", display: "flex", flexDirection: "column",
-        boxShadow: active ? `0 10px 30px ${hexAlpha(pt.color, 0.2)}` : shadow.sm,
-        transform: hovered && !selected ? "translateY(-3px)" : "translateY(0)",
-        minHeight: 260, textAlign: "left",
-      }}
-    >
-      <div style={{
-        width: 52, height: 52, borderRadius: radius.md,
-        background: active ? pt.color : C.bg,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: 18, transition: "all 0.2s",
-        color: active ? "#fff" : pt.color,
-      }}>
-        <Icon name={pt.icon} size={26} />
-      </div>
-      <p style={{ fontSize: 18, fontWeight: 700, color: active ? pt.color : C.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>{pt.title}</p>
-      <p style={{ fontSize: 13, fontWeight: 600, color: active ? pt.color : C.textMuted, margin: "0 0 12px" }}>{pt.tagline}</p>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: 0, lineHeight: 1.65, flex: 1 }}>{pt.desc}</p>
-      <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 11, color: C.textFaint, fontWeight: 600 }}>4 quick steps</span>
-        <span style={{ fontSize: 13, color: active ? pt.color : C.textMuted, fontWeight: 700 }}>
-          {selected ? "✓ Selected" : "Choose →"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function hexAlpha(hex: string, alpha: number) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Wizard Sidebar — vertical step list
 // ──────────────────────────────────────────────────────────────────────────────
 function WizardStepper({
-  steps, currentStep, pageType, onJump,
+  steps, currentStep, onJump,
 }: {
-  steps: { key: string; label: string }[]; currentStep: number; pageType: PageType; onJump: (i: number) => void;
+  steps: { key: string; label: string }[]; currentStep: number; onJump: (i: number) => void;
 }) {
-  const meta = PAGE_TYPES.find(t => t.key === pageType)!;
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "center", gap: 18, padding: "11px 24px",
@@ -102,7 +27,7 @@ function WizardStepper({
       {/* Context — what's being created */}
       <span style={{ fontSize: 12, color: C.textMuted, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.05em" }}>Creating</span>
-        <span style={{ fontWeight: 700, color: meta.color, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name={meta.icon} size={15} /> {meta.title}</span>
+        <span style={{ fontWeight: 700, color: C.blue, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name="page" size={15} /> Payment Page</span>
       </span>
 
       <div style={{ height: 18, width: 1, background: C.border, flexShrink: 0 }} />
@@ -363,15 +288,14 @@ export function Wizard({
 }: {
   initialData?: WizardData;
   initialStep?: number;
-  editing?: boolean;                               // reopening an existing page/draft → skip type-select
+  editing?: boolean;                               // reopening an existing page/draft
   onBack: () => void;                              // app's "leave the builder" handler (shows leave prompt if dirty)
   onSaveDraft?: (data: WizardData, step: number) => void;
   onPublish?: (data: WizardData) => void;
   onSyncState?: (data: WizardData, step: number, building: boolean) => void;
 }) {
   const seed = initialData ?? DEFAULT_WIZARD;
-  const [phase, setPhase] = useState<"type-select" | "wizard" | "success">(editing ? "wizard" : "type-select");
-  const [selectedType, setSelectedType] = useState<PageType | null>(editing ? seed.pageType : null);
+  const [phase, setPhase] = useState<"wizard" | "success">("wizard");
   const [currentStep, setCurrentStep] = useState(editing ? initialStep : 0);
   const [data, setData] = useState<WizardData>(seed);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
@@ -386,24 +310,7 @@ export function Wizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, currentStep, phase]);
 
-  const beginType = (key: PageType) => {
-    setSelectedType(key);
-    setData({ ...DEFAULT_WIZARD, pageType: key });
-    setCurrentStep(0);
-    setPublishErrors([]);
-    setPhase("wizard");
-  };
-
-  // Have any edits been made vs. a fresh page of this type? (Used only for the
-  // new-creation "back to type picker" confirm; leaving the builder entirely is
-  // handled by the app-level prompt.)
-  const isDirty = () =>
-    selectedType !== null &&
-    JSON.stringify(data) !== JSON.stringify({ ...DEFAULT_WIZARD, pageType: selectedType });
-
-  const handleSelectType = (key: PageType) => beginType(key);
-
-  const steps = selectedType ? getStepsForType(selectedType) : [];
+  const steps = getSteps();
   const totalSteps = steps.length;
 
   const canSaveDraft = !!onSaveDraft && data.title.trim().length > 0;
@@ -427,16 +334,9 @@ export function Wizard({
 
   const goBack = () => {
     if (currentStep > 0) { setCurrentStep(s => s - 1); return; }
-    // On step 1. When editing there's no type picker to return to → leave the
-    // builder (the app decides whether to prompt). For new creation, drop back
-    // to the type picker, confirming first if work would be lost.
-    if (editing) { onBack(); return; }
-    if (isDirty() && !window.confirm("Going back will discard the changes you've made to this page. Continue?")) return;
-    setData(DEFAULT_WIZARD);
-    setSelectedType(null);
-    setPublishErrors([]);
-    setCurrentStep(0);
-    setPhase("type-select");
+    // On step 1 → leave the builder (the app decides whether to prompt about
+    // unsaved changes via the global leave handler).
+    onBack();
   };
 
   // Pills: jump back to the current step or any visited step. Forward is locked.
@@ -444,14 +344,8 @@ export function Wizard({
     if (i <= currentStep && i >= 0 && i < totalSteps) setCurrentStep(i);
   };
 
-  // Render step 1 based on type
-  const renderStep1 = () => {
-    if (selectedType === "invoice") return <StepInvoiceDetails data={data} setData={setData} />;
-    return <StepPageDetails data={data} setData={setData} />;
-  };
-
   const stepComponents = [
-    renderStep1(),
+    <StepPageDetails key="details" data={data} setData={setData} />,
     <StepCustomerFields key="fields" data={data} setData={setData} />,
     <StepCustomization key="custom" data={data} setData={setData} />,
     <StepSettings key="settings" data={data} setData={setData} />,
@@ -465,25 +359,10 @@ export function Wizard({
     );
   }
 
-  if (phase === "type-select") {
-    return (
-      <div style={{ flex: 1, padding: "44px 40px", display: "flex", flexDirection: "column", overflowY: "auto" }}>
-        <button onClick={onBack} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6, fontWeight: 500, alignSelf: "flex-start" }}>
-          ← Back to dashboard
-        </button>
-        <div style={{ width: "100%", maxWidth: 820, margin: "32px auto 0", textAlign: "center" }}>
-          <h2 style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 8px", letterSpacing: "-0.02em" }}>What kind of page do you want to create?</h2>
-          <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 36px", lineHeight: 1.5 }}>Pick the one that fits your use case — each flow is tailored for what you need.</p>
-          <TypeSelector selected={selectedType} onSelect={handleSelectType} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
       {/* Horizontal stepper — second header row, full width */}
-      <WizardStepper steps={steps} currentStep={currentStep} pageType={selectedType ?? "page"} onJump={jumpTo} />
+      <WizardStepper steps={steps} currentStep={currentStep} onJump={jumpTo} />
 
       {/* Form + preview row */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
@@ -512,7 +391,7 @@ export function Wizard({
           </div>
           <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, background: C.white, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 10 }}>
             <Btn onClick={goBack} variant="ghost" size="sm">
-              ← {currentStep === 0 ? (editing ? "Exit" : "Type") : "Back"}
+              ← {currentStep === 0 ? "Exit" : "Back"}
             </Btn>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {onSaveDraft && (
