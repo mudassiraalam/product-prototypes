@@ -158,7 +158,10 @@ export function Standee({ data }: { data: QrData }) {
 // on UPI" callout: [VERIFY for on-screen dynamic QRs].
 // Status-aware: live (countdown) · collected (closed after payment) · expired.
 // ══════════════════════════════════════════════════════════════════════════════
-export type CollectMode = "live" | "collected" | "expired";
+// "perBill": an API-minted transaction QR. Each payment gets its own freshly
+// minted code with the amount baked in by the merchant system, so this detail
+// view shows a representative card: no amount, no countdown, no single ref.
+export type CollectMode = "live" | "collected" | "expired" | "perBill";
 
 function Monogram({ name, accent }: { name: string; accent: string }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join("") || "M";
@@ -177,17 +180,17 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
 
   useEffect(() => { setSecs(totalSecs); }, [totalSecs]);
   useEffect(() => {
-    if (mode !== "live") return;
+    if (mode !== "live" || !data.expiryEnabled) return;
     timer.current = setInterval(() => setSecs(s => (s > 0 ? s - 1 : 0)), 1000);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [mode]);
+  }, [mode, data.expiryEnabled]);
 
   const fmt = (s: number) => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
     return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`;
   };
-  const localExpired = mode === "live" && secs === 0;
-  const terminal = mode !== "live" || localExpired;
+  const localExpired = mode === "live" && data.expiryEnabled && secs === 0;
+  const terminal = (mode !== "live" && mode !== "perBill") || localExpired;
   const regenerate = () => { setRef(genQrRef()); setSecs(totalSecs); };
   const amount = parseFloat(data.oneTimeAmount || "0");
   const accent = data.brandColor || "#1c5af4";
@@ -204,6 +207,12 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
   const panelBorder = dark ? "rgba(255,255,255,0.10)" : C.borderLight;
 
   const statusBlock = () => {
+    if (mode === "perBill") return (
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 10, padding: 10 }}>
+        <Icon name="refresh" size={14} color={String(tSub)} />
+        <span style={{ fontSize: 12.5, color: tSub, textAlign: "center" }}>A fresh code is minted for every transaction</span>
+      </div>
+    );
     if (mode === "collected") return (
       <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: C.greenBg, border: `1px solid ${C.green}33`, borderRadius: 10, padding: 10 }}>
         <Icon name="checkCircle" size={16} color={C.green} />
@@ -213,14 +222,20 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
     if (mode === "expired" || localExpired) return (
       <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: C.redBg, border: `1px solid ${C.redMid}`, borderRadius: 10, padding: 10 }}>
         <Icon name="clock" size={15} color={C.red} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.red }}>Expired — no payment received</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.red }}>Closed — no payment received</span>
       </div>
     );
     return (
       <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: dark ? "rgba(255,255,255,0.06)" : `${accent}14`, border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : accent + "44"}`, borderRadius: 10, padding: 9 }}>
         <Icon name="clock" size={15} color={dark ? "#fff" : accent} />
-        <span style={{ fontSize: 13, color: tSub }}>Valid for</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: secs <= 60 ? C.red : dark ? "#fff" : accent, fontVariantNumeric: "tabular-nums" }}>{fmt(secs)}</span>
+        {data.expiryEnabled ? (
+          <>
+            <span style={{ fontSize: 13, color: tSub }}>Valid for</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: secs <= 60 ? C.red : dark ? "#fff" : accent, fontVariantNumeric: "tabular-nums" }}>{fmt(secs)}</span>
+          </>
+        ) : (
+          <span style={{ fontSize: 13, fontWeight: 700, color: dark ? "#fff" : accent }}>Awaiting payment</span>
+        )}
       </div>
     );
   };
@@ -234,12 +249,21 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
             <p style={{ fontSize: 13.5, fontWeight: 800, color: tMain, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName}</p>
             <p style={{ fontSize: 11.5, color: tSub, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.label || "One-time QR"}</p>
           </div>
-          <span style={{ fontSize: 10.5, color: tFaint, fontFamily: "monospace", flexShrink: 0 }}>ref {ref}</span>
+          <span style={{ fontSize: 10.5, color: tFaint, fontFamily: "monospace", flexShrink: 0 }}>{mode === "perBill" ? "ref per txn" : "ref " + ref}</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
-          <span style={{ fontSize: 28, fontWeight: 800, color: dark ? "#fff" : accent }}>₹{amount > 0 ? amount.toLocaleString("en-IN") : "—"}</span>
-          <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>pre-filled for the payer</span>
+          {mode === "perBill" ? (
+            <>
+              <span style={{ fontSize: 20, fontWeight: 800, color: tMain }}>Set per bill</span>
+              <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>amount baked in at mint time</span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 28, fontWeight: 800, color: dark ? "#fff" : accent }}>₹{amount > 0 ? amount.toLocaleString("en-IN") : "—"}</span>
+              <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>pre-filled for the payer</span>
+            </>
+          )}
         </div>
 
         <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: terminal ? 0.3 : 1, transition: "opacity 0.2s" }}>
@@ -251,9 +275,11 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
         </div>
 
         {statusBlock()}
-        {!terminal && (
+        {!terminal && mode !== "perBill" && (
           <p style={{ fontSize: 11, color: tFaint, textAlign: "center", margin: "9px 0 0", lineHeight: 1.5 }}>
-            Closes after one successful payment, or at expiry — whichever comes first
+            {data.expiryEnabled
+              ? "Closes after one successful payment, or at expiry — whichever comes first"
+              : "Closes after one successful payment"}
           </p>
         )}
 
@@ -270,7 +296,7 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
         </div>
       </div>
       {mode === "live" && (
-        <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>Amount &amp; reference are encoded in the code — try the timer.</p>
+        <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>{data.expiryEnabled ? "Amount & reference are encoded in the code — try the timer." : "Amount & reference are encoded in the code."}</p>
       )}
     </div>
   );
