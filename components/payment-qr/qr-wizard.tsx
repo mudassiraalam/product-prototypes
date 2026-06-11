@@ -90,7 +90,7 @@ function QrSuccessScreen({ data, onDone }: { data: QrData; onDone: () => void })
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: "0 0 6px", letterSpacing: "-0.01em" }}>{oneTime ? "Your one-time QR is live" : "Your QR is live"}</h2>
       <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 22px", textAlign: "center", maxWidth: 400, lineHeight: 1.6 }}>
         {oneTime
-          ? `"${data.label}" is collecting now — show this screen to the payer, or copy the UPI link and share it. It closes on payment or expiry.`
+          ? `"${data.label}" is collecting now — show this screen to the payer, or copy the UPI link and share it. It closes ${data.expiryEnabled ? "on payment or expiry." : "after the payment."}`
           : `"${data.label}" is published. Download the code to print it, or copy the UPI link — it opens any UPI app directly.`}
       </p>
       <div style={{ marginBottom: 24 }}><QrPreview data={data} device={primaryDevice(data)} /></div>
