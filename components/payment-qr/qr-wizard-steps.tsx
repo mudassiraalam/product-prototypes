@@ -66,7 +66,8 @@ export interface QrData {
   endDate: string;          // yyyy-mm-dd
   capEnabled: boolean;      // reusable: close after N successful payments
   capCount: string;
-  validityPreset: "15" | "60" | "1440" | "custom";  // onetime
+  expiryEnabled: boolean;   // onetime: optional close-by (Razorpay-style), default OFF
+  validityPreset: "15" | "60" | "1440" | "custom";  // onetime, when expiryEnabled
   validityCustomMinutes: string;
 
   slug: string;
@@ -96,6 +97,7 @@ export const DEFAULT_QR: QrData = {
   endDate: "",
   capEnabled: false,
   capCount: "",
+  expiryEnabled: false,
   validityPreset: "15",
   validityCustomMinutes: "",
 
@@ -132,7 +134,7 @@ export function validateQr(data: QrData): QrValidationError[] {
     if (!(parseFloat(data.oneTimeAmount || "0") > 0)) {
       e.push({ step: 0, message: "Enter the amount to collect — a one-time QR always carries one." });
     }
-    if (data.validityPreset === "custom" && !(parseInt(data.validityCustomMinutes || "0") > 0)) {
+    if (data.expiryEnabled && data.validityPreset === "custom" && !(parseInt(data.validityCustomMinutes || "0") > 0)) {
       e.push({ step: 0, message: "Enter a custom validity in minutes, or pick a preset." });
     }
   }
@@ -167,10 +169,21 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
             options={[{ key: "reusable", label: "Multiple Use" }, { key: "onetime", label: "One-time collect" }]} />
         </div>
         {data.usage === "reusable" ? (
-          <InfoBanner type="info">
-            One <strong>printed</strong> code that lives on your counter and takes many payments. It stays active until you
-            close it.
-          </InfoBanner>
+          <>
+            <InfoBanner type="info">
+              One <strong>printed</strong> code that lives on your counter and takes many payments. It stays active until
+              you close it.
+            </InfoBanner>
+            <div style={{ marginTop: 14 }}>
+              <Toggle checked={data.capEnabled} onChange={v => set({ capEnabled: v })}
+                label="Limit the number of payments"
+                desc="Close the QR after a set number of successful payments — e.g. 100 entry passes." />
+              {data.capEnabled && (
+                <Inp label="Maximum payments" type="number" value={data.capCount}
+                  onChange={v => set({ capCount: v })} placeholder="100" />
+              )}
+            </div>
+          </>
         ) : (
           <InfoBanner type="info">
             A code for collecting <strong>one specific payment</strong> — show it to the payer on a screen, or send them the
@@ -190,22 +203,31 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
             </InfoBanner>
           </SectionCard>
 
-          <SectionCard title="Valid for">
-            <SegmentedControl value={data.validityPreset}
-              onChange={v => set({ validityPreset: v as QrData["validityPreset"] })}
-              options={[
-                { key: "15", label: "15 min" }, { key: "60", label: "1 hour" },
-                { key: "1440", label: "24 hours" }, { key: "custom", label: "Custom" },
-              ]} />
-            {data.validityPreset === "custom" && (
+          <SectionCard title="Expiry">
+            <Toggle checked={data.expiryEnabled} onChange={v => set({ expiryEnabled: v })}
+              label="Expire automatically"
+              desc="Off by default — the QR stays open until it's paid or you close it. Turn on to auto-expire stale collections." />
+            {data.expiryEnabled && (
               <div style={{ marginTop: 14 }}>
-                <Inp label="Validity (minutes)" required type="number" value={data.validityCustomMinutes}
-                  onChange={v => set({ validityCustomMinutes: v })} placeholder="120" suffix="min" />
+                <SegmentedControl value={data.validityPreset}
+                  onChange={v => set({ validityPreset: v as QrData["validityPreset"] })}
+                  options={[
+                    { key: "15", label: "15 min" }, { key: "60", label: "1 hour" },
+                    { key: "1440", label: "24 hours" }, { key: "custom", label: "Custom" },
+                  ]} />
+                {data.validityPreset === "custom" && (
+                  <div style={{ marginTop: 14 }}>
+                    <Inp label="Validity (minutes)" required type="number" value={data.validityCustomMinutes}
+                      onChange={v => set({ validityCustomMinutes: v })} placeholder="120" suffix="min" />
+                  </div>
+                )}
               </div>
             )}
             <div style={{ marginTop: 14 }}>
               <InfoBanner type="info">
-                The code closes the moment it's paid, or when the timer runs out — whichever comes first.
+                {data.expiryEnabled
+                  ? <>Closes the moment it's paid, or when the timer runs out — whichever comes first.</>
+                  : <>Closes after one successful payment. You can also close it manually anytime from the dashboard.</>}
               </InfoBanner>
             </div>
           </SectionCard>
@@ -247,15 +269,6 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
             )}
           </SectionCard>
 
-          <SectionCard title="Payment limit">
-            <Toggle checked={data.capEnabled} onChange={v => set({ capEnabled: v })}
-              label="Close after a set number of payments"
-              desc="e.g. 100 entry passes, then the QR stops accepting payments." />
-            {data.capEnabled && (
-              <Inp label="Maximum payments" type="number" value={data.capCount}
-                onChange={v => set({ capCount: v })} placeholder="100" />
-            )}
-          </SectionCard>
         </>
       )}
 
