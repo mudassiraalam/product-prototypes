@@ -4,24 +4,17 @@ import { createPortal } from "react-dom";
 import { C, radius, shadow } from "./tokens";
 import { StatusBadge, Btn, useClickOutside } from "./primitives";
 import { Icon, IconName } from "./icons";
-import { PaymentPage, PageStatus, PageType, DASHBOARD_METRICS } from "./mock-data";
+import { PaymentPage, PageStatus, DASHBOARD_METRICS } from "./mock-data";
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Type-level colors (primary). Kind-level icons/colors come from getKindInfo().
+// Kind-level icons/colors come from getKindInfo().
 // ──────────────────────────────────────────────────────────────────────────────
-const TYPE_COLORS: Record<PageType, string> = {
-  "Standard Page": C.blue,
-  Invoice: "#0891b2",
-};
-
-// Derives the visual "kind" for the row icon. The sub-label is intentionally
-// not shown in the Type column — that would imply the merchant selected it,
-// when in fact it's inferred from amountType + isDonation + itemsAreTickets.
-// The icon alone preserves visual scannability without misleading the merchant.
+// Derives the visual "kind" for the row icon and pill — inferred from
+// amountType + isDonation + itemsAreTickets, never something the merchant
+// explicitly selected (the wizard has a single creation flow).
 type KindInfo = { label: string; icon: IconName; color: string };
 
 function getKindInfo(page: PaymentPage): KindInfo {
-  if (page.type === "Invoice") return { label: "Invoice", icon: "invoice", color: "#0891b2" };
   if (page.isDonation) return { label: "Donation", icon: "donation", color: "#e11d48" };
   if (page.itemsAreTickets) return { label: "Event Tickets", icon: "ticket", color: "#7c3aed" };
   if (page.amountType === "multiple") return { label: "Multiple Items", icon: "bag", color: "#1c5af4" };
@@ -234,7 +227,6 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
   // separate showArchived flag — selecting the Archived tab shows only archived
   // pages, any other tab hides them.
   const [statusTab, setStatusTab] = useState<"All" | PageStatus>("All");
-  const [typeFilter, setTypeFilter] = useState("All");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -259,14 +251,13 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
 
   const filtered = pages.filter(p => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase());
-    const matchType = typeFilter === "All" || p.type === typeFilter;
     // The Archived tab shows ONLY archived pages; every other tab hides them.
     // "All" shows everything except archived. A specific status tab matches it.
     const matchTab =
       statusTab === "Archived" ? p.status === "Archived"
       : statusTab === "All" ? p.status !== "Archived"
       : p.status === statusTab;
-    return matchSearch && matchType && matchTab;
+    return matchSearch && matchTab;
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -282,8 +273,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
   // off the search+type filtered set (minus the status dimension) so the counts
   // reflect what the user would actually see when they click each tab.
   const tabBase = pages.filter(p =>
-    (p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase()))
-    && (typeFilter === "All" || p.type === typeFilter)
+    p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase())
   );
   const tabCounts: Record<string, number> = {
     All: tabBase.filter(p => p.status !== "Archived").length,
@@ -302,8 +292,8 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
   // CSV export — downloads the currently filtered view. Matches the pattern
   // used by Stripe (Export current view) and Razorpay (Download as CSV).
   const exportCsv = () => {
-    const headers = ["ID", "Title", "Slug", "Type", "Amount", "Views", "Payments", "Revenue", "Status", "Created"];
-    const rows = sorted.map(p => [p.id, p.title, p.slug, p.type, p.amount, p.views, p.payments, p.revenue, p.status, p.created]);
+    const headers = ["ID", "Title", "Slug", "Kind", "Amount", "Views", "Payments", "Revenue", "Status", "Created"];
+    const rows = sorted.map(p => [p.id, p.title, p.slug, getKindInfo(p).label, p.amount, p.views, p.payments, p.revenue, p.status, p.created]);
     const escape = (v: string | number) => {
       const s = String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -447,11 +437,6 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                 placeholder="Search by title, slug or ID..."
                 style={{ ...baseInp, width: "100%", paddingLeft: 32 }} />
             </div>
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...baseInp }}>
-              <option value="All">All Types</option>
-              <option value="Standard Page">Standard Page</option>
-              <option value="Invoice">Invoice</option>
-            </select>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* Export — downloads the current filtered view as CSV */}
@@ -485,7 +470,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                 <tr style={{ background: C.bg }}>
                   {([
                     { label: "Page", key: null },
-                    { label: "Type", key: null },
+                    { label: "Kind", key: null },
                     { label: "Amount", key: null },
                     { label: "Views", key: "views" as const },
                     { label: "Payments", key: "payments" as const },
@@ -531,7 +516,6 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                   </tr>
                 ) : sorted.map(page => {
                   const kind = getKindInfo(page);
-                  const typeColor = TYPE_COLORS[page.type];
                   return (
                   <tr key={page.id}
                     style={{ borderTop: `1px solid ${C.borderLight}`, transition: "background 0.1s" }}
@@ -555,8 +539,8 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                       </div>
                     </td>
                     <td style={{ padding: "13px 16px" }}>
-                      <span style={{ fontSize: 12, background: typeColor + "18", color: typeColor, borderRadius: radius.full, padding: "3px 9px", fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {page.type}
+                      <span style={{ fontSize: 12, background: kind.color + "18", color: kind.color, borderRadius: radius.full, padding: "3px 9px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {kind.label}
                       </span>
                     </td>
                     <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 600, color: C.textSecondary, whiteSpace: "nowrap" }}>{page.amount}</td>
