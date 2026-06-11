@@ -58,7 +58,7 @@ export function wizardDataToQr(
     amount: amountDisplay(data),
     amountValue: amountValue(data),
     origin: ex?.origin ?? "dashboard",
-    location: ex?.location ?? (data.usage === "onetime" ? `Valid ${validityMinutes(data)} min` : "—"),
+    location: ex?.location ?? (data.usage === "onetime" ? (data.expiryEnabled ? `Valid ${validityMinutes(data)} min` : "Open until paid") : "—"),
     payments: ex?.payments ?? 0,
     revenue: ex?.revenue ?? "₹0",
     status: opts.status,
