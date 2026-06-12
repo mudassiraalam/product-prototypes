@@ -172,7 +172,7 @@ function Monogram({ name, accent }: { name: string; accent: string }) {
   );
 }
 
-export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: CollectMode }) {
+export function OneTimeCollect({ data, mode = "live", showCaption = true }: { data: QrData; mode?: CollectMode; showCaption?: boolean }) {
   const totalSecs = validityMinutes(data) * 60;
   const [secs, setSecs] = useState(totalSecs);
   const [ref, setRef] = useState(() => genQrRef());
@@ -295,7 +295,7 @@ export function OneTimeCollect({ data, mode = "live" }: { data: QrData; mode?: C
           <PartnerLogo reverse={dark} height={11} />
         </div>
       </div>
-      {mode === "live" && (
+      {mode === "live" && showCaption && (
         <p style={{ fontSize: 11.5, color: C.textFaint, marginTop: 16 }}>{data.expiryEnabled ? "Amount & reference are encoded in the code — try the timer." : "Amount & reference are encoded in the code."}</p>
       )}
     </div>
