@@ -6,8 +6,9 @@ import { adaptBrandColor, rgbString } from "./color-utils";
 import type { WizardData, PaymentMethod } from "./wizard-steps";
 import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
 import { qrMatrix } from "../payment-qr/qr-encoder";
-import { OneTimeCollect } from "../payment-qr/qr-preview";
+import { OneTimeCollect, PoweredByUpi } from "../payment-qr/qr-preview";
 import { DEFAULT_QR, type QrData } from "../payment-qr/qr-wizard-steps";
+import { upiString, genQrRef } from "../payment-qr/qr-mock-data";
 
 const FONT_MAP = {
   default: "var(--font-inter), 'Inter', system-ui, sans-serif",
@@ -503,8 +504,18 @@ function BillingPanel({
 
   const upiAmount = (total.match(/[\d.,]+/)?.[0] || "").replace(/,/g, "");
   const canPayUpi = parseFloat(upiAmount || "0") > 0;
-  const upiLink = `upi://pay?pa=enkashdemo@yesb&pn=${encodeURIComponent(data.merchantName || "EnKash Demo")}` +
-    (upiAmount ? `&am=${upiAmount}` : "") + `&cu=INR&tn=${encodeURIComponent(data.title || "Payment")}`;
+  // Mobile intent link — built through upiString so it pays the same verified
+  // profile VPA as the desktop modal QR and carries a per-attempt `tr`
+  // reference (re-minted in handlePay), keeping attribution intact on both
+  // surfaces. Previously hardcoded to a stray VPA with no reference.
+  const [intentRef, setIntentRef] = useState(() => genQrRef());
+  const upiLink = upiString({
+    vpa: DEFAULT_QR.vpa,
+    name: data.merchantName || "EnKash Demo",
+    amount: upiAmount,
+    note: data.title || "Payment",
+    ref: intentRef,
+  });
 
   // Per-order QR fed to the shared collect-screen renderer. Amount and theme
   // track the live page state; validity fixed at 15 minutes for checkout.
@@ -524,6 +535,7 @@ function BillingPanel({
   const handlePay = () => {
     if (activeMethod !== "upi") return;
     if (isDesktop) { if (canPayUpi) setQrOpen(true); return; }
+    setIntentRef(genQrRef());
     setRedirecting(true);
     setTimeout(() => setRedirecting(false), 3200);
   };
@@ -729,7 +741,7 @@ function BillingPanel({
 
       {/* Trust badges */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
-        {["256-bit SSL", "PCI DSS", "RBI Compliant"].map(b => (
+        {["256-bit SSL", "PCI DSS", "RBI-authorised Payment Aggregator"].map(b => (
           <span key={b} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: textFaint, fontWeight: 600, letterSpacing: "0.01em" }}>
             <span style={{ color: "#16a34a", fontSize: 11 }}>✓</span>{b}
           </span>
@@ -904,10 +916,17 @@ function UpiCheckout({
     </div>
   );
 
+  // OC-190 requires the literal 'Pay by any UPI App' displayed prominently for
+  // online merchants — the canonical string, not a paraphrase.
+  const heading = (
+    <p style={{ fontSize: 12.5, fontWeight: 800, color: text, margin: "0 0 8px" }}>Pay by any UPI app</p>
+  );
+
   // ── Desktop: blurred teaser → focused QR modal ──
   if (isDesktop) {
     return (
       <div>
+        {heading}
         <div
           onClick={canPay ? onOpen : undefined}
           role={canPay ? "button" : undefined}
@@ -937,6 +956,9 @@ function UpiCheckout({
         </div>
         {divider}
         <VpaInput brand={brand} base={base} pad={pad} fieldBorder={fieldBorder} fieldSurface={fieldSurface} />
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
+          <PoweredByUpi reverse={dark} height={12} />
+        </div>
       </div>
     );
   }
@@ -952,12 +974,16 @@ function UpiCheckout({
         <p style={{ fontSize: 12.5, fontWeight: 700, color: text, margin: "10px 0 2px" }}>Opening {app.label}…</p>
         <p style={{ fontSize: 10.5, color: textFaint, margin: 0 }}>Approve the payment in the app</p>
         <p style={{ fontSize: 9.5, color: textFaint, margin: "8px 0 0", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.5, opacity: 0.8 }}>{upiLink}</p>
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
+          <PoweredByUpi reverse={dark} height={12} />
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      {heading}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
         {UPI_APPS.map(a => {
           const selected = upiApp === a.key;
@@ -978,6 +1004,9 @@ function UpiCheckout({
       </div>
       {divider}
       <VpaInput brand={brand} base={base} pad={pad} fieldBorder={fieldBorder} fieldSurface={fieldSurface} />
+      <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
+        <PoweredByUpi reverse={dark} height={12} />
+      </div>
     </div>
   );
 }
