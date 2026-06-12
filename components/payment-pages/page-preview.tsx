@@ -1,11 +1,13 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Icon, EnkashLogo } from "./icons";
 import { adaptBrandColor, rgbString } from "./color-utils";
 import type { WizardData, PaymentMethod } from "./wizard-steps";
 import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
 import { qrMatrix } from "../payment-qr/qr-encoder";
+import { OneTimeCollect } from "../payment-qr/qr-preview";
+import { DEFAULT_QR, type QrData } from "../payment-qr/qr-wizard-steps";
 
 const FONT_MAP = {
   default: "var(--font-inter), 'Inter', system-ui, sans-serif",
@@ -488,39 +490,40 @@ function BillingPanel({
           : "Final Amount";
 
   // ── UPI checkout state ─────────────────────────────────────────────────────
-  // Desktop: a dynamic (amount-attached) QR is generated only when the customer
-  // clicks Pay, then stays valid for 15 minutes — mirroring how PG checkouts
-  // issue per-order QRs with an expiry. Mobile: the customer picks a UPI app
-  // and Pay fires the upi:// intent deep link for that app.
+  // Desktop: clicking Pay (or the QR teaser) opens a focused modal that mints a
+  // per-order dynamic QR. The QR itself is rendered by the QR product's
+  // collect-screen component (OneTimeCollect), so both surfaces share one
+  // NPCI-aligned rendering — the modal owns the QR lifecycle (fresh ref + 15-min
+  // countdown on every open; OneTimeCollect handles expiry/regenerate itself).
+  // Mobile: the customer picks a UPI app and Pay fires the upi:// intent link.
   const isDesktop = device === "desktop";
-  const [qrState, setQrState] = useState<"locked" | "active" | "expired">("locked");
-  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [qrOpen, setQrOpen] = useState(false);
   const [upiApp, setUpiApp] = useState("gpay");
   const [redirecting, setRedirecting] = useState(false);
 
   const upiAmount = (total.match(/[\d.,]+/)?.[0] || "").replace(/,/g, "");
+  const canPayUpi = parseFloat(upiAmount || "0") > 0;
   const upiLink = `upi://pay?pa=enkashdemo@yesb&pn=${encodeURIComponent(data.merchantName || "EnKash Demo")}` +
     (upiAmount ? `&am=${upiAmount}` : "") + `&cu=INR&tn=${encodeURIComponent(data.title || "Payment")}`;
 
-  // Countdown while the QR is live; expire at zero.
-  useEffect(() => {
-    if (qrState !== "active") return;
-    if (secondsLeft <= 0) { setQrState("expired"); return; }
-    const t = setTimeout(() => setSecondsLeft(n => n - 1), 1000);
-    return () => clearTimeout(t);
-  }, [qrState, secondsLeft]);
+  // Per-order QR fed to the shared collect-screen renderer. Amount and theme
+  // track the live page state; validity fixed at 15 minutes for checkout.
+  const checkoutQr: QrData = {
+    ...DEFAULT_QR,
+    usage: "onetime",
+    label: data.title || "Payment",
+    merchantName: data.merchantName || "EnKash Demo",
+    oneTimeAmount: upiAmount,
+    brandColor: data.brandColor,
+    screenTheme: dark ? "dark" : "light",
+    showMerchantLogo: data.showLogo,
+    expiryEnabled: true,
+    validityPreset: "15",
+  };
 
-  // A dynamic QR is fixed-amount — if the payable total changes, the issued QR
-  // is no longer valid, so drop back to the locked state.
-  useEffect(() => {
-    setQrState("locked");
-    setSecondsLeft(0);
-  }, [total]);
-
-  const startQr = () => { setQrState("active"); setSecondsLeft(15 * 60); };
   const handlePay = () => {
     if (activeMethod !== "upi") return;
-    if (isDesktop) { startQr(); return; }
+    if (isDesktop) { if (canPayUpi) setQrOpen(true); return; }
     setRedirecting(true);
     setTimeout(() => setRedirecting(false), 3200);
   };
@@ -695,9 +698,9 @@ function BillingPanel({
         </div>
         {activeMethod === "upi" ? (
           <UpiCheckout
-            isDesktop={isDesktop} qrState={qrState} secondsLeft={secondsLeft}
+            isDesktop={isDesktop} canPay={canPayUpi} onOpen={() => setQrOpen(true)}
             upiApp={upiApp} setUpiApp={setUpiApp} redirecting={redirecting}
-            upiLink={upiLink} onRegenerate={startQr}
+            upiLink={upiLink} qrPreviewValue={upiLink}
             brand={data.brandColor} text={text} textMuted={textMuted} textFaint={textFaint}
             fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact} dark={dark}
           />
@@ -711,7 +714,7 @@ function BillingPanel({
         )}
       </div>
 
-      {/* Pay button — for UPI it generates the QR (desktop) or fires the app intent (mobile) */}
+      {/* Pay button — for UPI it opens the QR modal (desktop) or fires the app intent (mobile) */}
       <button onClick={handlePay} style={{
         width: "100%", padding: compact ? "12px" : "14px", background: data.brandColor, color: onBrand,
         border: "none", borderRadius: btnRadius, fontSize: compact ? 14 : 15, fontWeight: 700,
@@ -732,6 +735,24 @@ function BillingPanel({
           </span>
         ))}
       </div>
+
+      {/* ── Checkout QR modal ──
+          Renders the QR product's collect screen (OneTimeCollect) so the PG
+          checkout and the QR product share one NPCI-aligned QR rendering.
+          Mounted fresh on every open → new reference + full 15:00 validity;
+          closing discards the minted QR. */}
+      {qrOpen && (
+        <div onClick={() => setQrOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "relative" }}>
+            <button
+              onClick={() => setQrOpen(false)}
+              aria-label="Close"
+              style={{ position: "absolute", top: -12, right: -12, width: 28, height: 28, borderRadius: "50%", background: "#ffffff", border: `1px solid ${C.border}`, boxShadow: shadow.md, cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, zIndex: 1, fontFamily: "inherit" }}
+            >✕</button>
+            <OneTimeCollect data={checkoutQr} mode="live" showCaption={false} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -861,11 +882,11 @@ function VpaInput({ brand, base, pad, fieldBorder, fieldSurface }: {
 }
 
 function UpiCheckout({
-  isDesktop, qrState, secondsLeft, upiApp, setUpiApp, redirecting, upiLink, onRegenerate,
+  isDesktop, canPay, onOpen, upiApp, setUpiApp, redirecting, upiLink, qrPreviewValue,
   brand, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact, dark,
 }: {
-  isDesktop: boolean; qrState: "locked" | "active" | "expired"; secondsLeft: number;
-  upiApp: string; setUpiApp: (k: string) => void; redirecting: boolean; upiLink: string; onRegenerate: () => void;
+  isDesktop: boolean; canPay: boolean; onOpen: () => void;
+  upiApp: string; setUpiApp: (k: string) => void; redirecting: boolean; upiLink: string; qrPreviewValue: string;
   brand: string; text: string; textMuted: string; textFaint: string;
   fieldSurface: string; fieldBorder: string; subtleBg: string; compact?: boolean; dark?: boolean;
 }) {
@@ -874,8 +895,6 @@ function UpiCheckout({
     width: "100%", padding: pad, border: `1px solid ${fieldBorder}`, borderRadius: radius.sm,
     fontSize: 13, color: text, background: fieldSurface, boxSizing: "border-box", fontFamily: "inherit", outline: "none",
   };
-  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
-  const ss = String(secondsLeft % 60).padStart(2, "0");
 
   const divider = (
     <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0" }}>
@@ -885,44 +904,28 @@ function UpiCheckout({
     </div>
   );
 
-  // ── Desktop: QR flow ──
+  // ── Desktop: blurred teaser → focused QR modal ──
   if (isDesktop) {
     return (
       <div>
-        <div style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, background: fieldSurface, padding: "16px 14px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div
+          onClick={canPay ? onOpen : undefined}
+          role={canPay ? "button" : undefined}
+          style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, background: fieldSurface, padding: "16px 14px", display: "flex", flexDirection: "column", alignItems: "center", cursor: canPay ? "pointer" : "default" }}
+        >
           <div style={{ position: "relative", borderRadius: 6, overflow: "hidden" }}>
-            <div style={{ filter: qrState === "active" ? "none" : "blur(7px)", opacity: qrState === "active" ? 1 : 0.45, transition: "filter 0.3s, opacity 0.3s" }}>
-              <UpiQr value={upiLink} size={152} />
+            <div style={{ filter: "blur(7px)", opacity: 0.45 }}>
+              <UpiQr value={qrPreviewValue} size={140} />
             </div>
-            {qrState !== "active" && (
-              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                {qrState === "locked" ? (
-                  <>
-                    <span style={{ width: 34, height: 34, borderRadius: "50%", background: brand, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="lock" size={15} /></span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: text, textAlign: "center" }}>Click Pay to generate QR</span>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: text }}>QR expired</span>
-                    <button onClick={onRegenerate} style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", background: brand, border: "none", borderRadius: radius.sm, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit" }}>
-                      Regenerate
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <span style={{ width: 34, height: 34, borderRadius: "50%", background: brand, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={canPay ? "lock" : "coins"} size={15} /></span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: text, textAlign: "center", maxWidth: 150 }}>
+                {canPay ? "Click Pay to scan & pay" : "Choose an amount to pay by QR"}
+              </span>
+            </div>
           </div>
-          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6, minHeight: 18 }}>
-            {qrState === "active" ? (
-              <>
-                <Icon name="clock" size={12} />
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: secondsLeft <= 60 ? "#dc2626" : textMuted, fontVariantNumeric: "tabular-nums" }}>
-                  Expires in {mm}:{ss}
-                </span>
-              </>
-            ) : (
-              <span style={{ fontSize: 11, color: textFaint }}>Scan with any UPI app</span>
-            )}
+          <div style={{ marginTop: 10 }}>
+            <span style={{ fontSize: 11, color: textFaint }}>Scan with any UPI app</span>
           </div>
           <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 7 }}>
             {UPI_APPS.map(a => (
