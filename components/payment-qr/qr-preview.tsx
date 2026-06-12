@@ -16,6 +16,11 @@ import { qrMatrix } from "./qr-encoder";
 //   (it rides inside the code as `am`).
 // Centre logo (EnKash) is rendered only when toggled — flagged for NPCI
 // approval per Annexure B, default off.
+// Public master-guideline elements (BHIM UPI Brand Guidelines, Jul '24):
+//   interoperable app-logo strip (always on — spec-table element, not a
+//   customisation control) · partner logo and BHIM|UPI lockup at the SAME
+//   height (parity constants below) · print floors: QR ≥40% of layout,
+//   logos ≥4% / 25px — the preview is a scaled representation.
 // Assets: /logos/bhim.svg · /logos/upi.svg · /logos/enkash.svg (partner).
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -39,6 +44,53 @@ function BhimUpiLockup({ reverse, height = 16 }: { reverse?: boolean; height?: n
 
 function PartnerLogo({ reverse, height = 14 }: { reverse?: boolean; height?: number }) {
   return <img src="/logos/enkash.svg" alt="EnKash" style={{ height, display: "block", ...(reverse ? REVERSE : undefined) }} />;
+}
+
+// NPCI parity rule: the main partner logo and the BHIM|UPI logo must be the
+// same size, matched by height — one constant per surface so they can't drift.
+const STANDEE_LOGO_H = 15;
+const COLLECT_LOGO_H = 12;
+
+// ── 'Powered by UPI' unit ─────────────────────────────────────────────────────
+// Required at the bottom centre of screens where UPI APIs are called / after a
+// transaction is initiated (online-merchant rules). The brand-guideline floor
+// is 25px on real surfaces; these previews are scaled. Falls back to text if
+// the UPI mark fails to load, same as BhimUpiLockup.
+export function PoweredByUpi({ reverse, height = 11 }: { reverse?: boolean; height?: number }) {
+  const [ok, setOk] = useState(true);
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+      <span style={{ fontSize: Math.max(6, height * 0.58), fontWeight: 700, letterSpacing: "0.1em", color: reverse ? "rgba(255,255,255,0.72)" : "#8a8f98" }}>POWERED BY</span>
+      {ok ? (
+        <img src="/logos/upi.svg" alt="UPI" style={{ height, display: "block", ...(reverse ? REVERSE : undefined) }} onError={() => setOk(false)} />
+      ) : (
+        <span style={{ fontSize: height * 0.85, fontWeight: 800, fontStyle: "italic", letterSpacing: "0.06em", color: reverse ? "#fff" : "#6d6e71" }}>UPI</span>
+      )}
+    </span>
+  );
+}
+
+// ── Interoperable UPI app logos ───────────────────────────────────────────────
+// A listed element of the offline merchant QR layout (public spec table:
+// 25px / 4% floor at print scale). Rendered always — it's a compliance element
+// of the layout, not a fifth customisation control. White chips keep the marks
+// legible on brand-coloured cards.
+const INTEROP_APPS = [
+  { key: "gpay", label: "GPay", logo: "/logos/gpay.svg" },
+  { key: "phonepe", label: "PhonePe", logo: "/logos/phonepe.svg" },
+  { key: "paytm", label: "Paytm", logo: "/logos/paytm.svg" },
+  { key: "bhim", label: "BHIM", logo: "/logos/bhim.svg" },
+];
+function InteropAppStrip() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+      {INTEROP_APPS.map(a => (
+        <span key={a.key} style={{ height: 18, display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 4, padding: "2px 6px", border: "1px solid rgba(15,23,42,0.10)" }}>
+          <img src={a.logo} alt={a.label} style={{ height: 12, width: "auto", display: "block" }} />
+        </span>
+      ))}
+    </div>
+  );
 }
 
 // Issuance date — MM/YYYY on the right side of the QR. Mandatory per addendum.
@@ -104,7 +156,7 @@ export function Standee({ data }: { data: QrData }) {
 
   const partnerCluster = (
     <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-      <PartnerLogo reverse={reverse} height={13} />
+      <PartnerLogo reverse={reverse} height={STANDEE_LOGO_H} />
       {data.showMerchantName && (
         <>
           <span style={{ width: 1, height: 14, background: divider }} />
@@ -115,7 +167,7 @@ export function Standee({ data }: { data: QrData }) {
       )}
     </div>
   );
-  const lockup = <BhimUpiLockup reverse={reverse} height={17} />;
+  const lockup = <BhimUpiLockup reverse={reverse} height={STANDEE_LOGO_H} />;
   const bhimTop = data.layoutVariant === "bhimTop";
 
   return (
@@ -133,8 +185,13 @@ export function Standee({ data }: { data: QrData }) {
               UPI ID: <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{data.vpa}</span>
             </div>
 
-            <div style={{ margin: "13px 0 14px", paddingTop: 12, borderTop: `1px solid ${divider}`, width: "100%", display: "flex", justifyContent: "center" }}>
+            <div style={{ margin: "13px 0 0", paddingTop: 12, borderTop: `1px solid ${divider}`, width: "100%", display: "flex", justifyContent: "center" }}>
               {bhimTop ? partnerCluster : lockup}
+            </div>
+
+            {/* Interoperable app strip — listed element of the offline QR spec */}
+            <div style={{ margin: "10px 0 14px" }}>
+              <InteropAppStrip />
             </div>
           </div>
 
@@ -154,7 +211,8 @@ export function Standee({ data }: { data: QrData }) {
 // ONE-TIME COLLECT — the payer-facing collect screen (shown on a device or
 // opened from a shared link). Composed per the addendum's Dynamic QR spec:
 // QR block · BHIM|UPI lockup · "Merchant Name | UPI ID" line · "Scan & Pay
-// with any UPI app" · partner (EnKash) logo. Issuance date + "Pay with Credit
+// with any UPI app" · partner (EnKash) logo · 'Powered by UPI' unit at the
+// bottom centre (online-merchant rules). Issuance date + "Pay with Credit
 // on UPI" callout: [VERIFY for on-screen dynamic QRs].
 // Status-aware: live (countdown) · collected (closed after payment) · expired.
 // ══════════════════════════════════════════════════════════════════════════════
@@ -289,10 +347,16 @@ export function OneTimeCollect({ data, mode = "live", showCaption = true }: { da
           </button>
         )}
 
+        {/* Option A footer: keep the BHIM|UPI + partner identity row (covers
+            the at-counter dynamic-QR reading) and add the 'Powered by UPI'
+            unit beneath it, bottom centre, per online-merchant rules. */}
         <div style={{ marginTop: 13, display: "flex", justifyContent: "center", alignItems: "center", gap: 10 }}>
-          <BhimUpiLockup reverse={dark} height={13} />
+          <BhimUpiLockup reverse={dark} height={COLLECT_LOGO_H} />
           <span style={{ width: 1, height: 13, background: dark ? "rgba(255,255,255,0.35)" : "#cbd2e0" }} />
-          <PartnerLogo reverse={dark} height={11} />
+          <PartnerLogo reverse={dark} height={COLLECT_LOGO_H} />
+        </div>
+        <div style={{ marginTop: 9, display: "flex", justifyContent: "center" }}>
+          <PoweredByUpi reverse={dark} height={11} />
         </div>
       </div>
       {mode === "live" && showCaption && (
