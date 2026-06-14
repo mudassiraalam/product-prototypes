@@ -1002,9 +1002,11 @@ function UpiCheckout({
           );
         })}
       </div>
-      {divider}
-      <VpaInput brand={brand} base={base} pad={pad} fieldBorder={fieldBorder} fieldSurface={fieldSurface} />
-      <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
+      {/* Mobile is intent-only: tapping an app fires the UPI Intent. No
+          VPA-entry field here — a UPI ID box is the Collect pattern, which
+          OC-190 moves app/mobile-web merchants away from. Desktop keeps the
+          QR + UPI ID pair the master guideline prescribes for web. */}
+      <div style={{ marginTop: 14, display: "flex", justifyContent: "center" }}>
         <PoweredByUpi reverse={dark} height={12} />
       </div>
     </div>
