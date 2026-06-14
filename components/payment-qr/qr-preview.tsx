@@ -210,10 +210,12 @@ export function Standee({ data }: { data: QrData }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ONE-TIME COLLECT — the payer-facing collect screen (shown on a device or
 // opened from a shared link). Composed per the addendum's Dynamic QR spec:
-// QR block · BHIM|UPI lockup · "Merchant Name | UPI ID" line · "Scan & Pay
-// with any UPI app" · partner (EnKash) logo · 'Powered by UPI' unit at the
-// bottom centre (online-merchant rules). Issuance date + "Pay with Credit
-// on UPI" callout: [VERIFY for on-screen dynamic QRs].
+// QR block · "Merchant Name | UPI ID" line · "Scan & Pay with any UPI app" ·
+// single footer row of partner (EnKash) logo + 'Powered by UPI' unit, bottom
+// centre (online-merchant rules). The BHIM|UPI lockup is intentionally NOT
+// here — it's the offline-standee element; stacking it above the Powered-by
+// unit duplicated the UPI mark. Issuance date + "Pay with Credit on UPI"
+// callout: [VERIFY for on-screen dynamic QRs].
 // Status-aware: live (countdown) · collected (closed after payment) · expired.
 // ══════════════════════════════════════════════════════════════════════════════
 // "perBill": an API-minted transaction QR. Each payment gets its own freshly
@@ -347,15 +349,14 @@ export function OneTimeCollect({ data, mode = "live", showCaption = true }: { da
           </button>
         )}
 
-        {/* Option A footer: keep the BHIM|UPI + partner identity row (covers
-            the at-counter dynamic-QR reading) and add the 'Powered by UPI'
-            unit beneath it, bottom centre, per online-merchant rules. */}
+        {/* Single footer row — EnKash + 'Powered by UPI' unit, bottom centre.
+            One UPI mark only: stacking the BHIM|UPI lockup above this unit
+            duplicated the UPI logo and read as a glitch. Transaction-page
+            canon wants the Powered-by unit here; the BHIM|UPI lockup belongs
+            to the printed Standee, where the offline rules require it. */}
         <div style={{ marginTop: 13, display: "flex", justifyContent: "center", alignItems: "center", gap: 10 }}>
-          <BhimUpiLockup reverse={dark} height={COLLECT_LOGO_H} />
-          <span style={{ width: 1, height: 13, background: dark ? "rgba(255,255,255,0.35)" : "#cbd2e0" }} />
           <PartnerLogo reverse={dark} height={COLLECT_LOGO_H} />
-        </div>
-        <div style={{ marginTop: 9, display: "flex", justifyContent: "center" }}>
+          <span style={{ width: 1, height: 16, background: dark ? "rgba(255,255,255,0.35)" : "#cbd2e0" }} />
           <PoweredByUpi reverse={dark} height={11} />
         </div>
       </div>
