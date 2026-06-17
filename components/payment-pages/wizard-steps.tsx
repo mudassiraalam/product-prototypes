@@ -1163,49 +1163,11 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
         />
       </SectionCard>
 
-      <SectionCard title="Payment Methods">
-        <p style={{ fontSize: 12, color: C.textMuted, margin: "0 0 12px", lineHeight: 1.5 }}>
-          Choose which methods customers can pay with, and which providers appear within each. At least one method must stay enabled.
-        </p>
-        {ALL_PAYMENT_METHODS.map(m => {
-          const enabled = data.paymentMethods.includes(m.key);
-          const isLastOn = enabled && data.paymentMethods.length === 1;
-          return (
-            <div key={m.key}>
-              <Toggle
-                checked={enabled}
-                onChange={v => {
-                  if (!v && isLastOn) return; // never allow zero methods
-                  const next = v
-                    ? [...data.paymentMethods, m.key]
-                    : data.paymentMethods.filter(k => k !== m.key);
-                  // Preserve canonical order so the page renders them consistently.
-                  const ordered = ALL_PAYMENT_METHODS.map(x => x.key).filter(k => next.includes(k));
-                  setData({ ...data, paymentMethods: ordered });
-                }}
-                label={m.label}
-                desc={isLastOn ? "Can't disable — at least one method is required" : undefined}
-              />
-              {enabled && m.key === "netbanking" && (
-                <PartnerPicker
-                  title="Banks shown to customers"
-                  options={NETBANKING_BANKS}
-                  selected={data.netbankingBanks}
-                  onChange={list => setData({ ...data, netbankingBanks: list })}
-                />
-              )}
-              {enabled && m.key === "wallets" && (
-                <PartnerPicker
-                  title="Wallets shown to customers"
-                  options={WALLET_PARTNERS}
-                  selected={data.wallets}
-                  onChange={list => setData({ ...data, wallets: list })}
-                />
-              )}
-            </div>
-          );
-        })}
-      </SectionCard>
+      {/* Payment-method selection removed from the page wizard — the PG account
+          owns method configuration centrally, and the checkout surfaces whatever
+          the account has enabled. (WizardData.paymentMethods / netbankingBanks /
+          wallets stay defined with full defaults for when the real PG checkout is
+          stitched in.) */}
 
       <SectionCard title="Limits & Expiry">
         <Inp label="Page Expires On" value={data.expiryDate} onChange={v => setData({ ...data, expiryDate: v })} type="date" hint="Leave blank for no expiry" />
