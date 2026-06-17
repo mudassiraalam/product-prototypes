@@ -48,7 +48,8 @@ export interface QrData {
   usage: Usage;
   amountMode: AmountMode;   // reusable only
   fixedAmount: string;      // reusable + fixed (encoded, never printed)
-  oneTimeAmount: string;    // onetime: mandatory
+  oneTimeAmount: string;    // onetime: when fixed
+  oneTimeAmountMode: AmountMode; // onetime: fixed (pre-filled) or any (payer enters)
 
   // standee design (reusable only) — addendum-bounded
   cardColorMode: CardColorMode;
@@ -83,6 +84,7 @@ export const DEFAULT_QR: QrData = {
   amountMode: "any",
   fixedAmount: "",
   oneTimeAmount: "",
+  oneTimeAmountMode: "fixed",
 
   cardColorMode: "white",
   brandColor: "#1c5af4",
@@ -131,8 +133,8 @@ export function validateQr(data: QrData): QrValidationError[] {
       e.push({ step: 0, message: "Enter how many payments to allow, or turn the cap off." });
     }
   } else {
-    if (!(parseFloat(data.oneTimeAmount || "0") > 0)) {
-      e.push({ step: 0, message: "Enter the amount to collect — a one-time QR always carries one." });
+    if (data.oneTimeAmountMode === "fixed" && !(parseFloat(data.oneTimeAmount || "0") > 0)) {
+      e.push({ step: 0, message: "Set the fixed amount to collect, or switch to Any amount." });
     }
     if (data.expiryEnabled && data.validityPreset === "custom" && !(parseInt(data.validityCustomMinutes || "0") > 0)) {
       e.push({ step: 0, message: "Enter a custom validity in minutes, or pick a preset." });
@@ -195,12 +197,26 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
       {data.usage === "onetime" && (
         <>
           <SectionCard title="Amount to collect">
-            <Inp label="Amount" required type="number" value={data.oneTimeAmount}
-              onChange={v => set({ oneTimeAmount: v })} prefix="₹" placeholder="12500" />
-            <InfoBanner type="info">
-              Encoded in the code — the payer's UPI app shows it pre-filled, so there's nothing to type and nothing to get
-              wrong.
-            </InfoBanner>
+            <div style={{ marginBottom: 14 }}>
+              <SegmentedControl value={data.oneTimeAmountMode}
+                onChange={v => set({ oneTimeAmountMode: v as AmountMode })}
+                options={[{ key: "any", label: "Any amount" }, { key: "fixed", label: "Fixed amount" }]} />
+            </div>
+            {data.oneTimeAmountMode === "fixed" ? (
+              <>
+                <Inp label="Amount" required type="number" value={data.oneTimeAmount}
+                  onChange={v => set({ oneTimeAmount: v })} prefix="₹" placeholder="12500" />
+                <InfoBanner type="info">
+                  Encoded in the code — the payer's UPI app shows it pre-filled, so there's nothing to type and nothing to
+                  get wrong.
+                </InfoBanner>
+              </>
+            ) : (
+              <InfoBanner type="info">
+                A one-time code with no set amount — the payer types how much they're paying, and it still closes after one
+                successful payment.
+              </InfoBanner>
+            )}
           </SectionCard>
 
           <SectionCard title="Expiry">
@@ -240,7 +256,7 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
             <div style={{ marginBottom: 14 }}>
               <SegmentedControl value={data.amountMode}
                 onChange={v => set({ amountMode: v as AmountMode })}
-                options={[{ key: "any", label: "Any amount" }, { key: "fixed", label: "Fixed price" }]} />
+                options={[{ key: "any", label: "Any amount" }, { key: "fixed", label: "Fixed amount" }]} />
             </div>
 
             {data.amountMode === "fixed" ? (
@@ -260,7 +276,7 @@ export function StepQrSetup({ data, setData }: { data: QrData; setData: (d: QrDa
             )}
           </SectionCard>
 
-          <SectionCard title="End date">
+          <SectionCard title="QR expiry">
             <Toggle checked={data.endDateEnabled} onChange={v => set({ endDateEnabled: v })}
               label="Stop accepting payments after a date"
               desc="Good for events or seasonal stalls. Leave off for a permanent counter QR that never expires." />
