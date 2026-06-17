@@ -66,7 +66,7 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
 
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ background: "#e9ecf3", borderRadius: radius.xl, padding: "30px 26px", flexShrink: 0 }}>
-          <QrPreview data={data} device={device} collectMode={collectMode} />
+          <QrPreview data={data} device={device} collectMode={collectMode} surface="monitor" />
           {qr.usage === "reusable" && (
             <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "center" }}>
               <Btn variant="secondary" size="sm" onClick={() => downloadQrPng(link, qr.label)}><Icon name="download" size={14} /> PNG</Btn>
