@@ -222,6 +222,11 @@ export function Standee({ data }: { data: QrData }) {
 // minted code with the amount baked in by the merchant system, so this detail
 // view shows a representative card: no amount, no countdown, no single ref.
 export type CollectMode = "live" | "collected" | "expired" | "perBill";
+// Which surface is rendering the collect screen. "payer" = the public page the
+// person scanning sees (wizard preview + the page-checkout popup). "monitor" =
+// the merchant dashboard detail view. Pallav: the payer screen drops the amount
+// header and the status box; the dashboard keeps both for at-a-glance monitoring.
+export type CollectSurface = "payer" | "monitor";
 
 function Monogram({ name, accent }: { name: string; accent: string }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join("") || "M";
@@ -232,7 +237,7 @@ function Monogram({ name, accent }: { name: string; accent: string }) {
   );
 }
 
-export function OneTimeCollect({ data, mode = "live", showCaption = true }: { data: QrData; mode?: CollectMode; showCaption?: boolean }) {
+export function OneTimeCollect({ data, mode = "live", showCaption = true, surface = "payer" }: { data: QrData; mode?: CollectMode; showCaption?: boolean; surface?: CollectSurface }) {
   const totalSecs = validityMinutes(data) * 60;
   const [secs, setSecs] = useState(totalSecs);
   const [ref, setRef] = useState(() => genQrRef());
@@ -252,9 +257,10 @@ export function OneTimeCollect({ data, mode = "live", showCaption = true }: { da
   const localExpired = mode === "live" && data.expiryEnabled && secs === 0;
   const terminal = (mode !== "live" && mode !== "perBill") || localExpired;
   const regenerate = () => { setRef(genQrRef()); setSecs(totalSecs); };
+  const anyAmount = data.usage === "onetime" && data.oneTimeAmountMode === "any";
   const amount = parseFloat(data.oneTimeAmount || "0");
   const accent = data.brandColor || "#1c5af4";
-  const text = upiString({ vpa: data.vpa, name: data.merchantName, amount: data.oneTimeAmount, ref });
+  const text = upiString({ vpa: data.vpa, name: data.merchantName, amount: anyAmount ? "" : data.oneTimeAmount, ref });
 
   // theme
   const dark = data.screenTheme === "dark";
@@ -312,19 +318,29 @@ export function OneTimeCollect({ data, mode = "live", showCaption = true }: { da
           <span style={{ fontSize: 10.5, color: tFaint, fontFamily: "monospace", flexShrink: 0 }}>{mode === "perBill" ? "ref per txn" : "ref " + ref}</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
-          {mode === "perBill" ? (
-            <>
-              <span style={{ fontSize: 20, fontWeight: 800, color: tMain }}>Set per bill</span>
-              <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>amount baked in at mint time</span>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: 28, fontWeight: 800, color: dark ? "#fff" : accent }}>₹{amount > 0 ? amount.toLocaleString("en-IN") : "—"}</span>
-              <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>pre-filled for the payer</span>
-            </>
-          )}
-        </div>
+        {/* Amount header — monitoring surfaces only. The payer-facing screen
+            doesn't show it (the amount is encoded in the QR; the payer's app
+            shows it). The dashboard keeps it for at-a-glance monitoring. */}
+        {surface === "monitor" && (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
+            {mode === "perBill" ? (
+              <>
+                <span style={{ fontSize: 20, fontWeight: 800, color: tMain }}>Set per bill</span>
+                <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>amount baked in at mint time</span>
+              </>
+            ) : anyAmount ? (
+              <>
+                <span style={{ fontSize: 22, fontWeight: 800, color: tMain }}>Any amount</span>
+                <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>payer enters the amount</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 28, fontWeight: 800, color: dark ? "#fff" : accent }}>₹{amount > 0 ? amount.toLocaleString("en-IN") : "—"}</span>
+                <span style={{ fontSize: 11, color: tFaint, marginLeft: "auto" }}>pre-filled for the payer</span>
+              </>
+            )}
+          </div>
+        )}
 
         <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: terminal ? 0.3 : 1, transition: "opacity 0.2s" }}>
           <div style={{ background: "#fff", borderRadius: 8, padding: 6 }}><QrSvg text={text} size={148} /></div>
@@ -334,7 +350,10 @@ export function OneTimeCollect({ data, mode = "live", showCaption = true }: { da
           <span style={{ fontSize: 9.5, fontWeight: 800, color: tSub, letterSpacing: "0.08em", textTransform: "uppercase" }}>Scan &amp; Pay with any UPI app</span>
         </div>
 
-        {statusBlock()}
+        {/* Status box — monitoring surfaces only (Awaiting payment / countdown
+            / collected / expired). The payer doesn't need merchant status; the
+            caption below still tells them the QR is one-time. */}
+        {surface === "monitor" && statusBlock()}
         {!terminal && mode !== "perBill" && (
           <p style={{ fontSize: 11, color: tFaint, textAlign: "center", margin: "9px 0 0", lineHeight: 1.5 }}>
             {data.expiryEnabled
@@ -369,7 +388,7 @@ export function OneTimeCollect({ data, mode = "live", showCaption = true }: { da
 
 // ── exported preview switch ───────────────────────────────────────────────────
 export type PreviewDevice = "standee" | "collect";
-export function QrPreview({ data, device, collectMode }: { data: QrData; device: PreviewDevice; collectMode?: CollectMode }) {
-  if (device === "collect") return <OneTimeCollect data={data} mode={collectMode} />;
+export function QrPreview({ data, device, collectMode, surface = "payer" }: { data: QrData; device: PreviewDevice; collectMode?: CollectMode; surface?: CollectSurface }) {
+  if (device === "collect") return <OneTimeCollect data={data} mode={collectMode} surface={surface} />;
   return <Standee data={data} />;
 }
