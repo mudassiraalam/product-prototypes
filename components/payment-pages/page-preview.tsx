@@ -498,7 +498,7 @@ function BillingPanel({
   // countdown on every open; OneTimeCollect handles expiry/regenerate itself).
   // Mobile: the customer picks a UPI app and Pay fires the upi:// intent link.
   const isDesktop = device === "desktop";
-  const [qrOpen, setQrOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [upiApp, setUpiApp] = useState("gpay");
   const [redirecting, setRedirecting] = useState(false);
 
@@ -532,9 +532,9 @@ function BillingPanel({
     validityPreset: "15",
   };
 
-  const handlePay = () => {
-    if (activeMethod !== "upi") return;
-    if (isDesktop) { if (canPayUpi) setQrOpen(true); return; }
+  const handlePay = () => setCheckoutOpen(true);
+  // Mobile UPI inside the checkout fires the upi:// intent (fresh ref each time).
+  const fireMobileIntent = () => {
     setIntentRef(genQrRef());
     setRedirecting(true);
     setTimeout(() => setRedirecting(false), 3200);
@@ -685,52 +685,14 @@ function BillingPanel({
         </div>
       )}
 
-      {/* ── PAY VIA — method selector + method-specific input ── */}
-      <div style={{ marginTop: 8 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Pay via</p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          {ALL_PAYMENT_METHODS.filter(m => methods.includes(m.key)).map(m => {
-            const selected = activeMethod === m.key;
-            return (
-              <button key={m.key} onClick={() => setPayMethod(m.key)} style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: compact ? "7px 11px" : "8px 14px",
-                border: `1.5px solid ${selected ? data.brandColor : fieldBorder}`,
-                background: selected ? hexAlpha(data.brandColor, 0.08) : fieldSurface,
-                color: selected ? data.brandColor : text, borderRadius: 999,
-                fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
-              }}>
-                {selected && (
-                  <span style={{ width: 14, height: 14, borderRadius: "50%", background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800 }}>✓</span>
-                )}
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-        {activeMethod === "upi" ? (
-          <UpiCheckout
-            isDesktop={isDesktop} canPay={canPayUpi} onOpen={() => setQrOpen(true)}
-            upiApp={upiApp} setUpiApp={setUpiApp} redirecting={redirecting}
-            upiLink={upiLink} qrPreviewValue={upiLink}
-            brand={data.brandColor} text={text} textMuted={textMuted} textFaint={textFaint}
-            fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact} dark={dark}
-          />
-        ) : (
-          <MethodInput
-            method={activeMethod} brand={data.brandColor}
-            banks={data.netbankingBanks} wallets={data.wallets}
-            text={text} textMuted={textMuted} textFaint={textFaint}
-            fieldSurface={fieldSurface} fieldBorder={fieldBorder} subtleBg={subtleBg} compact={compact}
-          />
-        )}
-      </div>
+      {/* Payment-method selection moved into the checkout modal below
+          (temp PG-checkout stand-in), opened by the Pay button. */}
 
-      {/* Pay button — for UPI it opens the QR modal (desktop) or fires the app intent (mobile) */}
+      {/* Pay button — opens the checkout (temp PG-checkout stand-in) */}
       <button onClick={handlePay} style={{
         width: "100%", padding: compact ? "12px" : "14px", background: data.brandColor, color: onBrand,
         border: "none", borderRadius: btnRadius, fontSize: compact ? 14 : 15, fontWeight: 700,
-        cursor: activeMethod === "upi" ? "pointer" : "default", fontFamily: "inherit", letterSpacing: "0.01em",
+        cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.01em",
         boxShadow: `0 6px 18px ${hexAlpha(data.brandColor, 0.32)}`,
         marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
@@ -748,20 +710,79 @@ function BillingPanel({
         ))}
       </div>
 
-      {/* ── Checkout QR modal ──
-          Renders the QR product's collect screen (OneTimeCollect) so the PG
-          checkout and the QR product share one NPCI-aligned QR rendering.
-          Mounted fresh on every open → new reference + full 15:00 validity;
-          closing discards the minted QR. */}
-      {qrOpen && (
-        <div onClick={() => setQrOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ position: "relative" }}>
-            <button
-              onClick={() => setQrOpen(false)}
-              aria-label="Close"
-              style={{ position: "absolute", top: -12, right: -12, width: 28, height: 28, borderRadius: "50%", background: "#ffffff", border: `1px solid ${C.border}`, boxShadow: shadow.md, cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, zIndex: 1, fontFamily: "inherit" }}
-            >✕</button>
-            <OneTimeCollect data={checkoutQr} mode="live" showCaption={false} />
+      {/* ── TEMP PG checkout (stand-in) ──
+          Opened by the Pay button; stands in for EnKash's real PG hosted
+          checkout, to be stitched in later. Method tabs + per-method panel,
+          order summary, trust line, EnKash / Powered-by-UPI branding. Desktop
+          UPI renders the shared collect-screen QR inline; mobile UPI fires the
+          upi:// intent. */}
+      {checkoutOpen && (
+        <div onClick={() => setCheckoutOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: 420, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "#ffffff", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,23,42,0.32)", padding: 20 }}>
+            <button onClick={() => setCheckoutOpen(false)} aria-label="Close" style={{ position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: "50%", background: "#f1f3f7", border: "none", cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, fontFamily: "inherit" }}>✕</button>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 8, background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{(data.merchantName || "E").charAt(0)}</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ fontSize: 13.5, fontWeight: 800, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "EnKash Demo"}</p>
+                <p style={{ fontSize: 11, color: C.textMuted, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.title || "Payment"}</p>
+              </div>
+              <span style={{ fontSize: 20, fontWeight: 800, color: C.text, flexShrink: 0 }}>{total}</span>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "16px 0 14px" }}>
+              {ALL_PAYMENT_METHODS.filter(m => methods.includes(m.key)).map(m => {
+                const selected = activeMethod === m.key;
+                return (
+                  <button key={m.key} onClick={() => setPayMethod(m.key)} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px",
+                    border: `1.5px solid ${selected ? data.brandColor : "#e3e7ee"}`,
+                    background: selected ? hexAlpha(data.brandColor, 0.08) : "#f7f8fa",
+                    color: selected ? data.brandColor : C.text, borderRadius: 999,
+                    fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                  }}>
+                    {selected && <span style={{ width: 14, height: 14, borderRadius: "50%", background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800 }}>✓</span>}
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {activeMethod === "upi" ? (
+              isDesktop ? (
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <OneTimeCollect data={{ ...checkoutQr, screenTheme: "light" }} mode="live" showCaption={false} surface="payer" />
+                </div>
+              ) : (
+                <>
+                  <UpiCheckout
+                    isDesktop={false} canPay={canPayUpi} onOpen={() => {}}
+                    upiApp={upiApp} setUpiApp={setUpiApp} redirecting={redirecting}
+                    upiLink={upiLink} qrPreviewValue={upiLink}
+                    brand={data.brandColor} text={C.text} textMuted={C.textMuted} textFaint={C.textMuted}
+                    fieldSurface="#ffffff" fieldBorder="#e3e7ee" subtleBg="#f1f3f7" compact={false} dark={false}
+                  />
+                  {!redirecting && (
+                    <button onClick={fireMobileIntent} style={{ width: "100%", marginTop: 12, padding: "13px", background: data.brandColor, color: onBrand, border: "none", borderRadius: btnRadius, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Pay {total}</button>
+                  )}
+                </>
+              )
+            ) : (
+              <MethodInput
+                method={activeMethod} brand={data.brandColor}
+                banks={data.netbankingBanks} wallets={data.wallets}
+                text={C.text} textMuted={C.textMuted} textFaint={C.textMuted}
+                fieldSurface="#ffffff" fieldBorder="#e3e7ee" subtleBg="#f1f3f7" compact={false}
+              />
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16, flexWrap: "wrap" }}>
+              {["256-bit SSL", "PCI DSS", "RBI-authorised Payment Aggregator"].map(b => (
+                <span key={b} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: C.textMuted, fontWeight: 600 }}>
+                  <span style={{ color: "#16a34a", fontSize: 11 }}>✓</span>{b}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       )}
