@@ -6,6 +6,7 @@ import { Btn, StatusBadge } from "@/components/payment-pages/primitives";
 import { QrCode, txnsForQr, successRateForQr, upiString, downloadQrPng } from "./qr-mock-data";
 import { qrToWizardData } from "./qr-mappers";
 import { QrPreview, CollectMode } from "./qr-preview";
+import { RecordDrawer, DrawerRecord } from "@/components/payment-pages/record-drawer";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -36,6 +37,17 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
 
   const txns = txnsForQr(qr.id);
   const rate = successRateForQr(qr.id);
+  const [record, setRecord] = useState<DrawerRecord | null>(null);
+
+  const txnRecord = (t: (typeof txns)[number]): DrawerRecord => ({
+    id: t.utr,
+    amount: t.amount,
+    status: t.status,
+    date: t.time,
+    source: { kind: "qr", name: qr.label, ref: qr.reference },
+    party: [{ label: "Payer VPA", value: t.payerVpa }],
+    details: [{ label: "UTR", value: t.utr }, { label: "Time", value: t.time }],
+  });
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "26px 30px", background: C.bg }}>
@@ -92,7 +104,9 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
               <p style={{ fontSize: 13, color: C.textFaint, margin: 0, padding: "18px" }}>No payments at this QR yet.</p>
             )}
             {txns.map((t, i) => (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 18px", borderBottom: i < txns.length - 1 ? `1px solid ${C.borderLight}` : "none", fontSize: 13 }}>
+              <div key={t.id} onClick={() => setRecord(txnRecord(t))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 18px", borderBottom: i < txns.length - 1 ? `1px solid ${C.borderLight}` : "none", fontSize: 13, cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#fafbfd"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                 <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                   <span style={{ fontFamily: "monospace", fontSize: 12, color: C.textSecondary }}>{t.payerVpa}</span>
                   <span style={{ fontSize: 11, color: C.textFaint }}>UTR {t.utr}</span>
@@ -107,6 +121,8 @@ export function QrDetailView({ qr, onBack, onEdit }: { qr: QrCode; onBack: () =>
           </div>
         </div>
       </div>
+
+      {record && <RecordDrawer record={record} onClose={() => setRecord(null)} />}
     </div>
   );
 }
