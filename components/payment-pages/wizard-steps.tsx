@@ -94,9 +94,6 @@ export interface WizardData {
   expiryDate: string;
   maxPayments: string;
   successMessage: string;
-  redirectUrl: string;
-  sendReceipt: boolean;
-  webhookUrl: string;
 
   // Internal UI state — true once the merchant manually edits the slug, after
   // which we stop auto-syncing it from the title.
@@ -187,9 +184,6 @@ export const DEFAULT_WIZARD: WizardData = {
   expiryDate: "",
   maxPayments: "",
   successMessage: "",
-  redirectUrl: "",
-  sendReceipt: true,
-  webhookUrl: "",
 };
 
 const FIELD_TYPES = [
@@ -1143,9 +1137,6 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
   const todayStr = new Date().toISOString().slice(0, 10);
   const expiryInPast = !!data.expiryDate && data.expiryDate < todayStr;
   const maxPaymentsInvalid = !!data.maxPayments && (parseInt(data.maxPayments) < 1 || isNaN(parseInt(data.maxPayments)));
-  const isValidUrl = (u: string) => { try { new URL(u); return true; } catch { return false; } };
-  const redirectInvalid = !!data.redirectUrl && !isValidUrl(data.redirectUrl);
-  const webhookInvalid = !!data.webhookUrl && !isValidUrl(data.webhookUrl);
 
   return (
     <div>
@@ -1177,15 +1168,7 @@ export function StepSettings({ data, setData }: { data: WizardData; setData: (d:
       </SectionCard>
 
       <SectionCard title="After Payment">
-        <Toggle checked={data.sendReceipt} onChange={v => setData({ ...data, sendReceipt: v })} label="Send payment receipt by email" desc="A branded receipt is auto-emailed to the customer after a successful payment" />
-        <Textarea label="Custom Success Message" value={data.successMessage} onChange={v => setData({ ...data, successMessage: v })} placeholder="Thank you for your payment! We'll be in touch shortly." rows={2} hint="Shown only if no Redirect URL is set" />
-        <Inp label="Redirect URL (optional)" value={data.redirectUrl} onChange={v => setData({ ...data, redirectUrl: v })} placeholder="https://yourbrand.com/thank-you" hint="If set, customers are redirected here after payment — the success message above is ignored" />
-        {redirectInvalid && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 0" }}>Enter a valid URL (including https://).</p>}
-      </SectionCard>
-
-      <SectionCard title="Webhooks (advanced)">
-        <Inp label="Webhook URL" value={data.webhookUrl} onChange={v => setData({ ...data, webhookUrl: v })} placeholder="https://api.yourbrand.com/webhooks/enkash" hint="Receive payment events on your server" />
-        {webhookInvalid && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 0" }}>Enter a valid URL (including https://).</p>}
+        <Textarea label="Custom Success Message" value={data.successMessage} onChange={v => setData({ ...data, successMessage: v })} placeholder="Thank you for your payment! We'll be in touch shortly." rows={2} hint="Shown to customers on the hosted page after a successful payment" />
       </SectionCard>
     </div>
   );
@@ -1213,8 +1196,6 @@ export function getSteps(): { key: string; label: string }[] {
 // wizard can jump the user straight to the fix. Per-step "Continue" stays free.
 // ──────────────────────────────────────────────────────────────────────────────
 export interface ValidationError { step: number; message: string; }
-
-const isValidUrlStr = (u: string) => { try { new URL(u); return true; } catch { return false; } };
 
 export function validateWizard(data: WizardData): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -1256,12 +1237,6 @@ export function validateWizard(data: WizardData): ValidationError[] {
   }
 
   // ── Step 4: Settings ──
-  if (data.redirectUrl && !isValidUrlStr(data.redirectUrl)) {
-    errors.push({ step: STEP_SETTINGS, message: "The redirect URL isn't valid (include https://)." });
-  }
-  if (data.webhookUrl && !isValidUrlStr(data.webhookUrl)) {
-    errors.push({ step: STEP_SETTINGS, message: "The webhook URL isn't valid (include https://)." });
-  }
   const todayStr = new Date().toISOString().slice(0, 10);
   if (data.expiryDate && data.expiryDate < todayStr) {
     errors.push({ step: STEP_SETTINGS, message: "The expiry date is in the past." });
