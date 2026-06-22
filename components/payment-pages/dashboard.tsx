@@ -5,6 +5,7 @@ import { C, radius, shadow } from "./tokens";
 import { StatusBadge, Btn, useClickOutside } from "./primitives";
 import { Icon, IconName } from "./icons";
 import { PaymentPage, PageStatus, DASHBOARD_METRICS } from "./mock-data";
+import { PagePaymentsPanel } from "./page-payments";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Kind-level icons/colors come from getKindInfo().
@@ -99,8 +100,9 @@ function HelpDot({ tip }: { tip: string }) {
   );
 }
 
-// Unified stat card. Shared chrome: a deep, fully-saturated left accent bar, an
-// uppercase label with a working help tooltip, and a large value. The body is:
+// Unified stat card. Shared chrome (no left accent bar, to match the PG
+// dashboard): an uppercase label with a working help tooltip, and a large
+// value. The body is:
 //   • variant="graph"     → sparkline + delta chip   (Total Revenue, Failed)
 //   • variant="breakdown" → list of label/value rows (Total Pages, Successful Payments)
 // All cards share one compact min-height so the 2-graph / 2-breakdown mix reads
@@ -119,15 +121,13 @@ function StatCard(props: {
   deltaPositive?: boolean;
   rows?: BreakdownRow[];
 }) {
-  const { label, value, accent, variant, tip } = props;
+  const { label, value, variant, tip } = props;
   return (
     <div style={{
       background: C.white, borderRadius: radius.lg, overflow: "hidden",
       border: `1px solid ${C.border}`, boxShadow: shadow.sm,
       minHeight: 138, display: "flex",
     }}>
-      {/* Deep, saturated left accent bar */}
-      <div style={{ width: 4, background: accent, flexShrink: 0 }} />
       <div style={{ flex: 1, padding: "14px 16px", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
           <span style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</span>
@@ -215,6 +215,17 @@ const baseInp: React.CSSProperties = {
   fontSize: 13, color: C.text, outline: "none", background: C.white, fontFamily: "inherit",
 };
 
+// Removable applied-filter chip (Status / Search / Date), mirroring the PG
+// dashboard's "Applied filters" row.
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span style={{ fontSize: 12, color: C.blueDark, background: C.blueLight, border: `1px solid ${C.blueMid}`, borderRadius: radius.full, padding: "3px 9px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      {label}
+      <button onClick={onClear} aria-label={`Clear ${label}`} style={{ background: "none", border: "none", color: C.blueDark, cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1, display: "inline-flex" }}>✕</button>
+    </span>
+  );
+}
+
 export function Dashboard({ pages, setPages, onCreate, onView }: {
   pages: PaymentPage[];
   setPages: React.Dispatch<React.SetStateAction<PaymentPage[]>>;
@@ -222,6 +233,9 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
   onView: (page: PaymentPage) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState<"all" | "title" | "id" | "slug">("all");
+  const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
+  const [view, setView] = useState<"pages" | "payments">("pages");
   // Single source of truth for the status tab row. "Archived" is now one of the
   // tabs (it replaces the old footer toggle), so the dashboard never needs a
   // separate showArchived flag — selecting the Archived tab shows only archived
@@ -249,15 +263,34 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
   // well enough for prototype sorting.
   const createdOf = (p: PaymentPage) => Date.parse(p.created.replace(",", "")) || 0;
 
+  // Scoped search — respects the field dropdown (All / Title / ID / Slug).
+  const matchesSearch = (p: PaymentPage) => {
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    const inTitle = p.title.toLowerCase().includes(q);
+    const inId = p.id.toLowerCase().includes(q);
+    const inSlug = p.slug.toLowerCase().includes(q);
+    if (searchField === "title") return inTitle;
+    if (searchField === "id") return inId;
+    if (searchField === "slug") return inSlug;
+    return inTitle || inId || inSlug;
+  };
+
+  // Date filter — created within the last N days, measured from the most recent
+  // page so the seeded demo data stays populated.
+  const newestCreated = pages.reduce((mx, p) => Math.max(mx, createdOf(p)), 0);
+  const matchesDate = (p: PaymentPage) => {
+    if (dateRange === "all") return true;
+    const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90;
+    return createdOf(p) >= newestCreated - days * 86400000;
+  };
+
   const filtered = pages.filter(p => {
-    const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase());
-    // The Archived tab shows ONLY archived pages; every other tab hides them.
-    // "All" shows everything except archived. A specific status tab matches it.
     const matchTab =
       statusTab === "Archived" ? p.status === "Archived"
       : statusTab === "All" ? p.status !== "Archived"
       : p.status === statusTab;
-    return matchSearch && matchTab;
+    return matchesSearch(p) && matchesDate(p) && matchTab;
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -272,9 +305,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
   // Counts per tab — shown as the little number beside each tab label. Computed
   // off the search+type filtered set (minus the status dimension) so the counts
   // reflect what the user would actually see when they click each tab.
-  const tabBase = pages.filter(p =>
-    p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase()) || p.slug.toLowerCase().includes(search.toLowerCase())
-  );
+  const tabBase = pages.filter(p => matchesSearch(p) && matchesDate(p));
   const tabCounts: Record<string, number> = {
     All: tabBase.filter(p => p.status !== "Archived").length,
     Active: tabBase.filter(p => p.status === "Active").length,
@@ -347,6 +378,19 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
           + Create Payment Page
         </Btn>
       </div>
+
+      {/* Pages | Payments — top-level views of the same product. Payments is the
+          global table of every submission across all pages, with a Source column. */}
+      <div style={{ display: "flex", gap: 24, borderBottom: `1px solid ${C.borderLight}`, marginBottom: 20 }}>
+        {([["pages", "Pages"], ["payments", "Payments"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setView(key)}
+            style={{ fontSize: 14, fontWeight: view === key ? 700 : 500, color: view === key ? C.blue : C.textMuted, background: "none", border: "none", borderBottom: `2px solid ${view === key ? C.blue : "transparent"}`, padding: "0 0 10px", marginBottom: -1, cursor: "pointer", fontFamily: "inherit" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "payments" ? <PagePaymentsPanel pages={pages} /> : (<>
 
       {/* Stats row — 2 graph cards (Revenue, Failed) + 2 breakdown cards
           (Total Pages, Successful Payments). Order matches the production
@@ -430,20 +474,34 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
         {/* Toolbar — search + type filter + export. (Status moved to the tabs
             above; the list/grid view toggle was removed to match production.) */}
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
-            <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, flexWrap: "wrap" }}>
+            <select value={searchField} onChange={e => setSearchField(e.target.value as typeof searchField)} aria-label="Search field"
+              style={{ ...baseInp, cursor: "pointer", color: C.textSecondary, fontWeight: 600 }}>
+              <option value="all">All fields</option>
+              <option value="title">Title</option>
+              <option value="id">ID</option>
+              <option value="slug">Slug</option>
+            </select>
+            <div style={{ position: "relative", flex: 1, maxWidth: 280, minWidth: 180 }}>
               <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.textFaint, display: "inline-flex" }}><Icon name="search" size={15} /></span>
               <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search by title, slug or ID..."
+                placeholder={searchField === "all" ? "Search pages..." : `Search by ${searchField}...`}
                 style={{ ...baseInp, width: "100%", paddingLeft: 32 }} />
             </div>
+            <select value={dateRange} onChange={e => setDateRange(e.target.value as typeof dateRange)} aria-label="Date range"
+              style={{ ...baseInp, cursor: "pointer", color: C.textSecondary, fontWeight: 600 }}>
+              <option value="all">All time</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* Export — downloads the current filtered view as CSV */}
             <div style={{ position: "relative" }}>
               <button onClick={() => setExportOpen(o => !o)}
                 style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}>
-                <Icon name="download" size={15} /> Export
+                <Icon name="download" size={15} /> Download
               </button>
               {exportOpen && (
                 <div style={{ position: "absolute", right: 0, top: "110%", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.lg, zIndex: 50, minWidth: 200, padding: 6 }}>
@@ -461,6 +519,21 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
             </div>
           </div>
         </div>
+
+        {/* Applied filters — removable chips for the active status tab, search,
+            and date range, with Clear all (mirrors the PG dashboard). */}
+        {(statusTab !== "All" || dateRange !== "all" || !!search.trim()) && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 20px", borderBottom: `1px solid ${C.borderLight}`, background: C.bg, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: C.textFaint }}>Applied filters</span>
+            {statusTab !== "All" && <FilterChip label={`Status: ${statusTab}`} onClear={() => setStatusTab("All")} />}
+            {!!search.trim() && <FilterChip label={`${searchField === "all" ? "Search" : searchField}: ${search}`} onClear={() => setSearch("")} />}
+            {dateRange !== "all" && <FilterChip label={`Date: ${dateRange === "7d" ? "Last 7 days" : dateRange === "30d" ? "Last 30 days" : "Last 90 days"}`} onClear={() => setDateRange("all")} />}
+            <button onClick={() => { setStatusTab("All"); setSearch(""); setDateRange("all"); }}
+              style={{ fontSize: 12, color: C.blue, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", marginLeft: "auto", fontWeight: 600 }}>
+              Clear all
+            </button>
+          </div>
+        )}
 
         {/* Table */}
         {(
@@ -583,6 +656,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
           </span>
         </div>
       </div>
+      </>)}
     </div>
   );
 }
