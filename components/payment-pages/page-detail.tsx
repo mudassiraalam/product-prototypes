@@ -1,12 +1,37 @@
 "use client";
 import { useState } from "react";
 import { C, radius, shadow } from "./tokens";
-import { Modal, StatusBadge, Btn, Inp, Toggle, SegmentedControl } from "./primitives";
+import { Modal, StatusBadge, Btn, SegmentedControl } from "./primitives";
 import { Icon, IconName } from "./icons";
 import { PaymentPage, Submission, PAGE_SUBMISSIONS } from "./mock-data";
 import { PagePreview } from "./page-preview";
 import { WizardData } from "./wizard-steps";
 import { pageToWizardData } from "./page-mappers";
+import { RecordDrawer, DrawerRecord } from "./record-drawer";
+
+// Build the drawer payload for one page submission. The blue source pill on the
+// drawer links this payment back to its page (the payment-linked tag).
+function submissionToRecord(sub: Submission, page: PaymentPage, fieldLabels: string[]): DrawerRecord {
+  const r = sub.responses;
+  const phone = r["Phone Number"] || r["Phone"] || r["Mobile"] || "";
+  return {
+    id: sub.id,
+    amount: sub.amount,
+    status: sub.status,
+    date: sub.date,
+    source: { kind: "page", name: page.title, ref: page.id },
+    party: [
+      { label: "Name", value: r["Full Name"] || r[fieldLabels[0]] || "—" },
+      { label: "Email", value: r["Email Address"] || "—" },
+      ...(phone ? [{ label: "Phone", value: phone }] : []),
+    ],
+    details: [
+      { label: "Date", value: sub.date },
+      { label: "Page", value: `pay.enkash.in/${page.slug}` },
+    ],
+    responses: fieldLabels.map(l => ({ label: l, value: r[l] || "—" })),
+  };
+}
 
 // ── QR Code Modal ──────────────────────────────────────────────────────────────
 function QRModal({ page, onClose }: { page: PaymentPage; onClose: () => void }) {
@@ -140,8 +165,8 @@ function ShareModal({ page, onClose }: { page: PaymentPage; onClose: () => void 
 // after is generated from the page's customerFields (the form the merchant
 // built in wizard Step 2), so the form builder and this view stay connected.
 // Records are payment-linked only — abandoned forms are not captured.
-function SubmissionsTab({ page, fieldLabels, submissions }: {
-  page: PaymentPage; fieldLabels: string[]; submissions: Submission[];
+function SubmissionsTab({ page, fieldLabels, submissions, onOpen }: {
+  page: PaymentPage; fieldLabels: string[]; submissions: Submission[]; onOpen: (sub: Submission) => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -252,7 +277,7 @@ function SubmissionsTab({ page, fieldLabels, submissions }: {
                   <td style={{ padding: "12px 16px" }}>
                     <input type="checkbox" checked={on} onChange={() => toggle(sub.id)} style={{ cursor: "pointer", width: 15, height: 15 }} />
                   </td>
-                  <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: C.textMuted, whiteSpace: "nowrap" }}>{sub.id}</td>
+                  <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}><button onClick={() => onOpen(sub)} style={{ fontFamily: "monospace", fontSize: 12, color: C.blue, fontWeight: 600, background: "none", border: "none", padding: 0, cursor: "pointer" }}>{sub.id}</button></td>
                   <td style={{ padding: "12px 16px", fontSize: 12, color: C.textFaint, whiteSpace: "nowrap" }}>{sub.date}</td>
                   <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap" }}>{sub.amount}</td>
                   <td style={{ padding: "12px 16px" }}><StatusBadge status={sub.status} /></td>
@@ -301,59 +326,12 @@ function PreviewModal({ page, data, onClose }: { page: PaymentPage; data: Wizard
   );
 }
 
-// ── Receipt Configuration Modal ─────────────────────────────────────────────────
-function ReceiptModal({ page, data, onClose }: { page: PaymentPage; data: WizardData; onClose: () => void }) {
-  const [sendReceipt, setSendReceipt] = useState(data.sendReceipt);
-  const [replyTo, setReplyTo] = useState(data.contactEmail || "support@enkash.com");
-  const [saved, setSaved] = useState(false);
-  return (
-    <Modal title="Receipt Configuration" subtitle={page.title} onClose={onClose} width={520}>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 18px", lineHeight: 1.6 }}>
-        Automatic email receipts are sent to customers after a successful payment.
-      </p>
-      <Toggle checked={sendReceipt} onChange={setSendReceipt} label="Send email receipts" desc="Customers receive a branded receipt with payment details" />
-      {sendReceipt && (
-        <div style={{ marginTop: 4 }}>
-          <Inp label="Reply-to email" value={replyTo} onChange={setReplyTo} placeholder="support@yourbrand.com" type="email" hint="Replies from customers go to this address" />
-        </div>
-      )}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn variant="primary" onClick={() => { setSaved(true); setTimeout(onClose, 600); }}>{saved ? "✓ Saved!" : "Save"}</Btn>
-      </div>
-    </Modal>
-  );
-}
-
-// ── Redirect & Webhook Modal ────────────────────────────────────────────────────
-function RedirectModal({ page, data, onClose }: { page: PaymentPage; data: WizardData; onClose: () => void }) {
-  const [redirect, setRedirect] = useState(data.redirectUrl);
-  const [webhook, setWebhook] = useState(data.webhookUrl);
-  const [saved, setSaved] = useState(false);
-  const badUrl = (u: string) => u.trim() !== "" && !/^https?:\/\//.test(u.trim());
-  return (
-    <Modal title="Redirect & Webhook" subtitle={page.title} onClose={onClose} width={540}>
-      <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 18px", lineHeight: 1.6 }}>
-        Send customers to your own page after payment, and notify your server in real time.
-      </p>
-      <Inp label="Post-payment redirect URL" value={redirect} onChange={setRedirect} placeholder="https://yourbrand.com/thank-you" hint="Customer lands here after a successful payment" />
-      {badUrl(redirect) && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 14px" }}>Include https://</p>}
-      <Inp label="Webhook endpoint" value={webhook} onChange={setWebhook} placeholder="https://api.yourbrand.com/enkash/webhook" hint="We POST payment events to this URL" />
-      {badUrl(webhook) && <p style={{ fontSize: 11, color: C.red, margin: "-12px 0 14px" }}>Include https://</p>}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn variant="primary" onClick={() => { if (!badUrl(redirect) && !badUrl(webhook)) { setSaved(true); setTimeout(onClose, 600); } }}>{saved ? "✓ Saved!" : "Save"}</Btn>
-      </div>
-    </Modal>
-  );
-}
-
-
 // ── Page Detail View ───────────────────────────────────────────────────────────
 export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: PaymentPage; onBack: () => void; onEdit: (page: PaymentPage) => void }) {
   const [page] = useState(initialPage);
   const [tab, setTab] = useState<"overview" | "submissions">("overview");
-  const [activeModal, setActiveModal] = useState<"qr" | "share" | "preview" | "receipt" | "redirect" | null>(null);
+  const [activeModal, setActiveModal] = useState<"qr" | "share" | "preview" | null>(null);
+  const [record, setRecord] = useState<DrawerRecord | null>(null);
   const stats = [
     { label: "Page Views", value: page.views.toLocaleString(), color: C.blue },
     { label: "Payments", value: page.payments.toLocaleString(), color: C.green },
@@ -368,6 +346,7 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
   // own form fields. Pages created in-session have no records yet.
   const submissions: Submission[] = PAGE_SUBMISSIONS[page.id] ?? [];
   const fieldLabels = previewData.customerFields.map(f => f.label);
+  const openSubmission = (sub: Submission) => setRecord(submissionToRecord(sub, page, fieldLabels));
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
@@ -429,7 +408,7 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
         {/* Left: per-tab content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {tab === "submissions" ? (
-            <SubmissionsTab page={page} fieldLabels={fieldLabels} submissions={submissions} />
+            <SubmissionsTab page={page} fieldLabels={fieldLabels} submissions={submissions} onOpen={openSubmission} />
           ) : (
           <>
           {/* Stats */}
@@ -466,7 +445,9 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
               </thead>
               <tbody>
                 {submissions.slice(0, 3).map(sub => (
-                  <tr key={sub.id} style={{ borderTop: `1px solid ${C.borderLight}` }}>
+                  <tr key={sub.id} onClick={() => openSubmission(sub)} style={{ borderTop: `1px solid ${C.borderLight}`, cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#fafbfd"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     <td style={{ padding: "11px 16px" }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: "0 0 1px" }}>{sub.responses["Full Name"] || sub.responses[fieldLabels[0]] || "—"}</p>
                       <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{sub.responses["Email Address"] || sub.id}</p>
@@ -479,24 +460,6 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
               </tbody>
             </table>
             )}
-          </div>
-
-          {/* Quick actions */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
-            {[
-              { icon: <Icon name="receipt" size={22} />, title: "Receipt Configuration", desc: "Configure automatic email receipts sent after payment", action: () => setActiveModal("receipt") },
-              { icon: <Icon name="redirect" size={22} />, title: "Redirect & Webhook", desc: "Set post-payment redirect URL and webhook endpoint", action: () => setActiveModal("redirect") },
-            ].map(c => (
-              <div key={c.title} onClick={c.action} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "16px 18px", cursor: "pointer", transition: "border-color 0.15s, box-shadow 0.15s", display: "flex", gap: 14, alignItems: "flex-start" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = C.blue; (e.currentTarget as HTMLDivElement).style.boxShadow = shadow.md; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = C.border; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}>
-                <span style={{ flexShrink: 0, color: C.blue, marginTop: 1 }}>{c.icon}</span>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 3px" }}>{c.title}</p>
-                  <p style={{ fontSize: 12, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>{c.desc}</p>
-                </div>
-              </div>
-            ))}
           </div>
           </>
           )}
@@ -523,8 +486,7 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
       {activeModal === "qr" && <QRModal page={page} onClose={() => setActiveModal(null)} />}
       {activeModal === "share" && <ShareModal page={page} onClose={() => setActiveModal(null)} />}
       {activeModal === "preview" && <PreviewModal page={page} data={previewData} onClose={() => setActiveModal(null)} />}
-      {activeModal === "receipt" && <ReceiptModal page={page} data={previewData} onClose={() => setActiveModal(null)} />}
-      {activeModal === "redirect" && <RedirectModal page={page} data={previewData} onClose={() => setActiveModal(null)} />}
+      {record && <RecordDrawer record={record} onClose={() => setRecord(null)} />}
     </div>
   );
 }
