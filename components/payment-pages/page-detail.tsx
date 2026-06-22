@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, ReactNode } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Modal, StatusBadge, Btn, SegmentedControl } from "./primitives";
 import { Icon, IconName } from "./icons";
@@ -326,18 +326,37 @@ function PreviewModal({ page, data, onClose }: { page: PaymentPage; data: Wizard
   );
 }
 
+// Small label/value cell used across the redesigned detail view's field grids.
+export function FieldRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 3px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{label}</p>
+      <div style={{ fontSize: 13, color: C.text }}>{value}</div>
+    </div>
+  );
+}
+
+// Light placeholder for the Refunds / Settlements tabs until real data exists.
+export function EmptyTab({ icon, title, body }: { icon: IconName; title: string; body: string }) {
+  return (
+    <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "48px 24px", textAlign: "center", maxWidth: 900 }}>
+      <p style={{ margin: "0 0 10px", color: C.textFaint, display: "flex", justifyContent: "center" }}><Icon name={icon} size={28} /></p>
+      <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: "0 0 4px" }}>{title}</p>
+      <p style={{ fontSize: 13, color: C.textMuted, margin: 0, lineHeight: 1.6 }}>{body}</p>
+    </div>
+  );
+}
+
+const amountTypeLabel = (t: PaymentPage["amountType"]) => t === "fixed" ? "Fixed" : t === "customer" ? "Customer decides" : "Multiple items";
+
 // ── Page Detail View ───────────────────────────────────────────────────────────
 export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: PaymentPage; onBack: () => void; onEdit: (page: PaymentPage) => void }) {
   const [page] = useState(initialPage);
-  const [tab, setTab] = useState<"overview" | "submissions">("overview");
+  const [tab, setTab] = useState<"details" | "submissions" | "refunds" | "settlements">("details");
   const [activeModal, setActiveModal] = useState<"qr" | "share" | "preview" | null>(null);
   const [record, setRecord] = useState<DrawerRecord | null>(null);
-  const stats = [
-    { label: "Page Views", value: page.views.toLocaleString(), color: C.blue },
-    { label: "Payments", value: page.payments.toLocaleString(), color: C.green },
-    { label: "Conversion", value: `${((page.payments / Math.max(page.views, 1)) * 100).toFixed(1)}%`, color: "#7c3aed" },
-    { label: "Revenue", value: page.revenue, color: C.amber },
-  ];
+  const [copied, setCopied] = useState<string | null>(null);
+  const copyText = (text: string, key: string) => { navigator.clipboard?.writeText(text).catch(() => {}); setCopied(key); setTimeout(() => setCopied(c => (c === key ? null : c)), 1500); };
 
   // Full builder state for this page — drives both the rail preview and the modal.
   const previewData: WizardData = pageToWizardData(page);
@@ -348,50 +367,73 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
   const fieldLabels = previewData.customerFields.map(f => f.label);
   const openSubmission = (sub: Submission) => setRecord(submissionToRecord(sub, page, fieldLabels));
 
+  const statusColor = page.status === "Active" ? C.green : page.status === "Draft" ? C.amber : page.status === "Expired" ? C.red : C.textMuted;
+  const amountDisplay = page.amountType === "customer" ? "Customer decides" : page.amount;
+  const conversion = `${((page.payments / Math.max(page.views, 1)) * 100).toFixed(1)}%`;
+  const pageUrl = `https://pay.enkash.in/${page.slug}`;
+  const TABS = [
+    { key: "details", label: "Page details" },
+    { key: "submissions", label: "Submissions" },
+    { key: "refunds", label: "Refunds" },
+    { key: "settlements", label: "Settlements" },
+  ] as const;
+
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
-      {/* Header */}
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", background: C.bg }}>
+      {/* Header — back link, detail card (status panel + ID + amount + field grid + actions), tabs */}
       <div style={{ padding: "20px 32px 0", background: C.white, borderBottom: `1px solid ${C.border}` }}>
-        <button onClick={onBack} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: 0, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: 0, marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
           ← Back to Payment Pages
         </button>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 20 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: 0, letterSpacing: "-0.02em" }}>{page.title}</h1>
-              <StatusBadge status={page.status} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <a href={`https://pay.enkash.in/${page.slug}`} target="_blank" rel="noreferrer"
-                style={{ fontSize: 13, color: C.blue, textDecoration: "none", fontWeight: 500 }}>
-                pay.enkash.in/{page.slug} ↗
-              </a>
-              <span style={{ width: 1, height: 14, background: C.border }} />
-              <span style={{ fontSize: 12, color: C.textFaint, fontFamily: "monospace" }}>{page.id}</span>
-              {page.expires && <span style={{ fontSize: 12, color: C.amber }}>Expires {page.expires}</span>}
-            </div>
+
+        <div style={{ display: "flex", gap: 18, alignItems: "stretch", paddingBottom: 18 }}>
+          <div style={{ width: 132, flexShrink: 0, background: statusColor + "14", borderRadius: radius.md, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 9, padding: "18px 10px" }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: statusColor }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: statusColor }}>{page.status}</span>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="ghost" onClick={() => setActiveModal("qr")}>QR Code</Btn>
-            <Btn variant="ghost" onClick={() => setActiveModal("share")}>Share</Btn>
-            <Btn variant="secondary" onClick={() => onEdit(page)}>Edit Page</Btn>
-            <Btn variant="primary" onClick={() => setTab("submissions")}>View Submissions</Btn>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0, letterSpacing: "-0.02em" }}>{page.title}</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
+                  <span style={{ fontSize: 12, color: C.textMuted }}>Payment page ID</span>
+                  <span style={{ fontSize: 12.5, fontFamily: "monospace", color: C.blue }}>{page.id}</span>
+                  <button onClick={() => copyText(page.id, "id")} title="Copy page ID" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: C.textFaint, display: "inline-flex", alignItems: "center" }}>
+                    {copied === "id" ? <span style={{ color: C.green, fontSize: 13 }}>✓</span> : <Icon name="copy" size={13} />}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: C.textFaint, marginTop: 4 }}>Created on {page.created}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 11, color: C.textFaint, marginBottom: 2 }}>Amount</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{amountDisplay}</div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: "14px 0" }} />
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "12px 18px" }}>
+              <FieldRow label="Page URL" value={<a href={pageUrl} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>pay.enkash.in/{page.slug} ↗</a>} />
+              <FieldRow label="Status" value={<span style={{ color: statusColor, fontWeight: 600 }}>{page.status}</span>} />
+              <FieldRow label="Amount type" value={amountTypeLabel(page.amountType)} />
+              <FieldRow label="Expiry" value={page.expires ?? "No expiry"} />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+              <Btn variant="ghost" onClick={() => setActiveModal("preview")}>Preview</Btn>
+              <Btn variant="ghost" onClick={() => setActiveModal("share")}>Share</Btn>
+              <Btn variant="ghost" onClick={() => setActiveModal("qr")}>QR Code</Btn>
+              <Btn variant="secondary" onClick={() => onEdit(page)}>Edit Page</Btn>
+            </div>
           </div>
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", gap: 22 }}>
-          {([
-            { key: "overview" as const, label: "Overview" },
-            { key: "submissions" as const, label: "Submissions" },
-          ]).map(t => {
+          {TABS.map(t => {
             const active = tab === t.key;
             return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{
-                background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit",
-                fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted,
-                borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6,
-              }}>
+              <button key={t.key} onClick={() => setTab(t.key)} style={{ background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted, borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {t.label}
                 {t.key === "submissions" && (
                   <span style={{ fontSize: 11, fontWeight: 700, background: active ? C.blueLight : C.bg, color: active ? C.blueDark : C.textMuted, borderRadius: radius.full, padding: "1px 8px" }}>
@@ -404,82 +446,42 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: "24px 32px", display: "flex", gap: 24 }}>
-        {/* Left: per-tab content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {tab === "submissions" ? (
-            <SubmissionsTab page={page} fieldLabels={fieldLabels} submissions={submissions} onOpen={openSubmission} />
-          ) : (
-          <>
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 22 }}>
-            {stats.map(s => (
-              <div key={s.label} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "14px 16px" }}>
-                <p style={{ fontSize: 11, color: C.textMuted, margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{s.label}</p>
-                <p style={{ fontSize: 20, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
+      {/* Tab content */}
+      <div style={{ flex: 1, padding: "24px 32px" }}>
+        {tab === "submissions" && <SubmissionsTab page={page} fieldLabels={fieldLabels} submissions={submissions} onOpen={openSubmission} />}
+
+        {tab === "details" && (
+          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "20px 22px", maxWidth: 900 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 16px" }}>Page details</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 18 }}>
+              <FieldRow label="Amount type" value={amountTypeLabel(page.amountType)} />
+              <FieldRow label="Amount" value={amountDisplay} />
+              <FieldRow label="Page views" value={page.views.toLocaleString()} />
+              <FieldRow label="Payments" value={page.payments.toLocaleString()} />
+              <FieldRow label="Revenue" value={page.revenue} />
+              <FieldRow label="Conversion" value={conversion} />
+              <FieldRow label="Button label" value={page.buttonLabel} />
+              <FieldRow label="Theme" value={page.theme === "dark" ? "Dark" : "Light"} />
+            </div>
+            <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: "18px 0 16px" }} />
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 5px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Page URL</p>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.bg, border: `1px solid ${C.borderLight}`, borderRadius: radius.md, padding: "7px 11px" }}>
+                <span style={{ fontSize: 13, fontFamily: "monospace", color: C.blue }}>{pageUrl}</span>
+                <button onClick={() => copyText(pageUrl, "url")} title="Copy URL" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: C.textFaint, display: "inline-flex", alignItems: "center" }}>
+                  {copied === "url" ? <span style={{ color: C.green, fontSize: 13 }}>✓</span> : <Icon name="copy" size={14} />}
+                </button>
               </div>
-            ))}
+            </div>
+            <div>
+              <p style={{ fontSize: 11, color: C.textFaint, margin: "0 0 5px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Payment for</p>
+              <p style={{ fontSize: 13, color: C.text, margin: 0, lineHeight: 1.6 }}>{page.description || "—"}</p>
+            </div>
           </div>
+        )}
 
-          {/* Recent submissions */}
-          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden" }}>
-            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: 0 }}>Recent Submissions</p>
-              <button onClick={() => setTab("submissions")}
-                style={{ fontSize: 12, color: C.blue, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>
-                View all →
-              </button>
-            </div>
-            {submissions.length === 0 ? (
-              <p style={{ padding: "22px 18px", fontSize: 13, color: C.textMuted, margin: 0, textAlign: "center" }}>
-                No submissions yet — they appear here once customers start paying.
-              </p>
-            ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: C.bg }}>
-                  {["Customer", "Amount", "Status", "Date"].map(h => (
-                    <th key={h} style={{ padding: "9px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {submissions.slice(0, 3).map(sub => (
-                  <tr key={sub.id} onClick={() => openSubmission(sub)} style={{ borderTop: `1px solid ${C.borderLight}`, cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#fafbfd"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <td style={{ padding: "11px 16px" }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: "0 0 1px" }}>{sub.responses["Full Name"] || sub.responses[fieldLabels[0]] || "—"}</p>
-                      <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{sub.responses["Email Address"] || sub.id}</p>
-                    </td>
-                    <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 700, color: C.text }}>{sub.amount}</td>
-                    <td style={{ padding: "11px 16px" }}><StatusBadge status={sub.status} /></td>
-                    <td style={{ padding: "11px 16px", fontSize: 12, color: C.textFaint }}>{sub.date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            )}
-          </div>
-          </>
-          )}
-        </div>
-
-        {/* Right: live preview */}
-        <div style={{ width: 320, flexShrink: 0 }}>
-          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden", position: "sticky", top: 20 }}>
-            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Preview</p>
-              <button onClick={() => setActiveModal("preview")}
-                style={{ fontSize: 11, color: C.blue, fontWeight: 700, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                Open <Icon name="expand" size={12} />
-              </button>
-            </div>
-            <div style={{ maxHeight: 520, overflow: "auto", background: "#e9ecf3", padding: "12px" }}>
-              <PagePreview data={previewData} device="mobile" />
-            </div>
-          </div>
-        </div>
+        {tab === "refunds" && <EmptyTab icon="refresh" title="No refunds yet" body="Refunds raised against payments on this page will appear here." />}
+        {tab === "settlements" && <EmptyTab icon="receipt" title="No settlements yet" body="Once payments are settled to your account, settlement records show up here." />}
       </div>
 
       {/* Modals */}
