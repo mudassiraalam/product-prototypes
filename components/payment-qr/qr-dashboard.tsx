@@ -79,10 +79,9 @@ function StatCard(props: {
   trend?: readonly number[]; trendStroke?: string; trendFill?: string;
   deltaPct?: number; deltaPositive?: boolean; rows?: BreakdownRow[]; footer?: React.ReactNode;
 }) {
-  const { label, value, accent, variant, tip } = props;
+  const { label, value, variant, tip } = props;
   return (
     <div style={{ background: C.white, borderRadius: radius.lg, overflow: "hidden", border: `1px solid ${C.border}`, boxShadow: shadow.sm, minHeight: 138, display: "flex" }}>
-      <div style={{ width: 4, background: accent, flexShrink: 0 }} />
       <div style={{ flex: 1, padding: "14px 16px", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
           <span style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</span>
@@ -153,6 +152,15 @@ const baseInp: React.CSSProperties = { padding: "8px 12px", border: `1.5px solid
 
 type SortKey = "payments" | "revenue" | "created";
 
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span style={{ fontSize: 12, color: C.blueDark, background: C.blueLight, border: `1px solid ${C.blueMid}`, borderRadius: radius.full, padding: "3px 9px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      {label}
+      <button onClick={onClear} aria-label={`Clear ${label}`} style={{ background: "none", border: "none", color: C.blueDark, cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1, display: "inline-flex" }}>✕</button>
+    </span>
+  );
+}
+
 export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, onDownload, onCopy, onDelete }: {
   codes: QrCode[]; onCreate: () => void;
   onView: (q: QrCode) => void; onEdit: (q: QrCode) => void; onToggleStatus: (q: QrCode) => void;
@@ -166,6 +174,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "created", dir: "desc" });
+  const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
 
   const matchesType = (c: QrCode) =>
     typeFilter === "All" ? true
@@ -174,7 +183,17 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
     : c.usage === "onetime";
   const matchesSearch = (c: QrCode) => `${c.label} ${c.location} ${c.vpa}`.toLowerCase().includes(search.toLowerCase());
 
-  const tabBase = codes.filter(c => matchesSearch(c) && matchesType(c));
+  // Date filter — created within the last N days, measured from the most recent
+  // QR so the seeded demo data stays populated.
+  const createdMs = (c: QrCode) => Date.parse(c.created.replace(",", "")) || 0;
+  const newestCreated = codes.reduce((mx, c) => Math.max(mx, createdMs(c)), 0);
+  const matchesDate = (c: QrCode) => {
+    if (dateRange === "all") return true;
+    const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90;
+    return createdMs(c) >= newestCreated - days * 86400000;
+  };
+
+  const tabBase = codes.filter(c => matchesSearch(c) && matchesType(c) && matchesDate(c));
   const tabCounts: Record<string, number> = {
     All: tabBase.length,
     Active: tabBase.filter(c => c.status === "Active").length,
@@ -279,9 +298,30 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
               <option value="fixed">Fixed price</option>
               <option value="onetime">One-time</option>
             </select>
+            <select value={dateRange} onChange={e => setDateRange(e.target.value as typeof dateRange)} aria-label="Date range" style={{ ...baseInp, cursor: "pointer", color: C.textSecondary, fontWeight: 600 }}>
+              <option value="all">All time</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
           </div>
-          <button style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}><Icon name="download" size={15} /> Export</button>
+          <button style={{ ...baseInp, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: C.textSecondary }}><Icon name="download" size={15} /> Download</button>
         </div>
+
+        {/* Applied filters — removable chips for status, search, type, and date. */}
+        {(statusTab !== "All" || dateRange !== "all" || typeFilter !== "All" || !!search.trim()) && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 20px", borderBottom: `1px solid ${C.borderLight}`, background: C.bg, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: C.textFaint }}>Applied filters</span>
+            {statusTab !== "All" && <FilterChip label={`Status: ${statusTab}`} onClear={() => setStatusTab("All")} />}
+            {!!search.trim() && <FilterChip label={`Search: ${search}`} onClear={() => setSearch("")} />}
+            {typeFilter !== "All" && <FilterChip label={`Type: ${typeFilter === "any" ? "Any amount" : typeFilter === "fixed" ? "Fixed price" : "One-time"}`} onClear={() => setTypeFilter("All")} />}
+            {dateRange !== "all" && <FilterChip label={`Date: ${dateRange === "7d" ? "Last 7 days" : dateRange === "30d" ? "Last 30 days" : "Last 90 days"}`} onClear={() => setDateRange("all")} />}
+            <button onClick={() => { setStatusTab("All"); setSearch(""); setTypeFilter("All"); setDateRange("all"); }}
+              style={{ fontSize: 12, color: C.blue, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", marginLeft: "auto", fontWeight: 600 }}>
+              Clear all
+            </button>
+          </div>
+        )}
 
         {/* Table */}
         <div style={{ overflowX: "auto" }}>
