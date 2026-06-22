@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { C, radius, shadow } from "@/components/payment-pages/tokens";
 import { StatusBadge } from "@/components/payment-pages/primitives";
 import { QrCode, QR_TRANSACTIONS } from "./qr-mock-data";
+import { RecordDrawer, DrawerRecord } from "@/components/payment-pages/record-drawer";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Global Payments view — every payment across every QR, filterable by QR.
@@ -28,6 +29,17 @@ export function QrPaymentsPanel({ codes }: { codes: QrCode[] }) {
 
   const byId = useMemo(() => new Map(codes.map(c => [c.id, c])), [codes]);
   const sharedVpa = codes[0]?.vpa ?? "";
+  const [record, setRecord] = useState<DrawerRecord | null>(null);
+
+  const toRecord = (t: (typeof QR_TRANSACTIONS)[number], qr: QrCode | undefined): DrawerRecord => ({
+    id: t.utr,
+    amount: t.amount,
+    status: t.status,
+    date: t.time,
+    source: { kind: "qr", name: qr?.label ?? t.qrId, ref: qr?.reference ?? t.qrId },
+    party: [{ label: "Payer VPA", value: t.payerVpa }],
+    details: [{ label: "UTR", value: t.utr }, { label: "Time", value: t.time }],
+  });
 
   const rows = QR_TRANSACTIONS
     .filter(t => qrFilter === "all" || t.qrId === qrFilter)
@@ -85,8 +97,10 @@ export function QrPaymentsPanel({ codes }: { codes: QrCode[] }) {
           const qr = byId.get(t.qrId);
           const dynamic = qr?.usage === "onetime";
           return (
-            <div key={t.id} style={{ display: "grid", gridTemplateColumns: "1.3fr 1.4fr 1.2fr 0.8fr 0.8fr 1.1fr", gap: 12, alignItems: "center", padding: "12px 18px", borderBottom: i < rows.length - 1 ? `1px solid ${C.borderLight}` : "none", fontSize: 13 }}>
-              <span style={{ fontFamily: "monospace", fontSize: 12, color: C.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.utr}</span>
+            <div key={t.id} onClick={() => setRecord(toRecord(t, qr))} style={{ display: "grid", gridTemplateColumns: "1.3fr 1.4fr 1.2fr 0.8fr 0.8fr 1.1fr", gap: 12, alignItems: "center", padding: "12px 18px", borderBottom: i < rows.length - 1 ? `1px solid ${C.borderLight}` : "none", fontSize: 13, cursor: "pointer" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#fafbfd"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <span style={{ fontFamily: "monospace", fontSize: 12, color: C.blue, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.utr}</span>
               <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
                 <span style={{ fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{qr?.label ?? t.qrId}</span>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: dynamic ? C.blue : C.textMuted, border: `1px solid ${dynamic ? C.blueMid : C.border}`, borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>
@@ -101,6 +115,8 @@ export function QrPaymentsPanel({ codes }: { codes: QrCode[] }) {
           );
         })}
       </div>
+
+      {record && <RecordDrawer record={record} onClose={() => setRecord(null)} />}
     </div>
   );
 }
