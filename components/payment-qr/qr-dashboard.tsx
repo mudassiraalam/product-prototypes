@@ -329,7 +329,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
             <thead>
               <tr style={{ background: C.bg }}>
                 {([
-                  { label: "QR / Location", key: null }, { label: "UPI ID", key: null }, { label: "Amount", key: null },
+                  { label: "QR / Location", key: null }, { label: "QR ID", key: null }, { label: "UPI ID", key: null }, { label: "Amount", key: null },
                   { label: "Paid", key: "payments" as const }, { label: "Collected", key: "revenue" as const },
                   { label: "Status", key: null }, { label: "Created", key: "created" as const }, { label: "Actions", key: null },
                 ]).map(col => {
@@ -349,7 +349,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
             </thead>
             <tbody>
               {sorted.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: "48px", textAlign: "center" }}>
+                <tr><td colSpan={9} style={{ padding: "48px", textAlign: "center" }}>
                   <p style={{ fontSize: 15, color: C.textMuted, margin: "0 0 6px" }}>No QR codes match your filters</p>
                   <p style={{ fontSize: 13, color: C.textFaint, margin: 0 }}>Try adjusting your search or filters</p>
                 </td></tr>
@@ -368,6 +368,7 @@ export function QrDashboard({ codes, onCreate, onView, onEdit, onToggleStatus, o
                       </div>
                     </div>
                   </td>
+                  <td style={{ padding: "13px 16px", fontSize: 12, fontFamily: "monospace", color: C.textMuted, whiteSpace: "nowrap" }}>{c.id}</td>
                   <td style={{ padding: "13px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: 12, color: C.textSecondary, fontFamily: "monospace", whiteSpace: "nowrap" }}>{c.vpa}</span>
