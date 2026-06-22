@@ -543,6 +543,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                 <tr style={{ background: C.bg }}>
                   {([
                     { label: "Page", key: null },
+                    { label: "Page ID", key: null },
                     { label: "Kind", key: null },
                     { label: "Amount", key: null },
                     { label: "Views", key: "views" as const },
@@ -578,7 +579,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
               <tbody>
                 {sorted.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: "48px", textAlign: "center" }}>
+                    <td colSpan={10} style={{ padding: "48px", textAlign: "center" }}>
                       <p style={{ fontSize: 15, color: C.textMuted, margin: "0 0 6px" }}>
                         {showArchived ? "No archived pages" : "No payment pages match your filters"}
                       </p>
@@ -611,6 +612,7 @@ export function Dashboard({ pages, setPages, onCreate, onView }: {
                         </div>
                       </div>
                     </td>
+                    <td style={{ padding: "13px 16px", fontSize: 12, fontFamily: "monospace", color: C.textMuted, whiteSpace: "nowrap" }}>{page.id}</td>
                     <td style={{ padding: "13px 16px" }}>
                       <span style={{ fontSize: 12, background: kind.color + "18", color: kind.color, borderRadius: radius.full, padding: "3px 9px", fontWeight: 700, whiteSpace: "nowrap" }}>
                         {kind.label}
