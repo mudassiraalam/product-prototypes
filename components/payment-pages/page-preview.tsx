@@ -24,7 +24,7 @@ function isDark(hex: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 < 145;
 }
 
-function hexAlpha(hex: string, alpha: number) {
+export function hexAlpha(hex: string, alpha: number) {
   if (!hex || !hex.startsWith("#") || hex.length < 7) return hex;
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -793,7 +793,7 @@ function BillingPanel({
 // ──────────────────────────────────────────────────────────────────────────────
 // Buyer field — renders a real, type-aware input with a label above it
 // ──────────────────────────────────────────────────────────────────────────────
-function BuyerField({
+export function BuyerField({
   field, symbol, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
 }: {
   field: { type: string; label: string; optional: boolean };
@@ -914,7 +914,7 @@ function VpaInput({ brand, base, pad, fieldBorder, fieldSurface }: {
   );
 }
 
-function UpiCheckout({
+export function UpiCheckout({
   isDesktop, canPay, onOpen, upiApp, setUpiApp, redirecting, upiLink, qrPreviewValue,
   brand, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact, dark,
 }: {
@@ -1035,7 +1035,7 @@ function UpiCheckout({
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-function MethodInput({
+export function MethodInput({
   method, brand, banks, wallets, text, textMuted, textFaint, fieldSurface, fieldBorder, subtleBg, compact,
 }: {
   method: PaymentMethod; brand: string; banks?: string[]; wallets?: string[];
