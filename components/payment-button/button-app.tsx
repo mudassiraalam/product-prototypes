@@ -44,7 +44,9 @@ export function ButtonApp({ onNavigateProduct }: { onNavigateProduct: (key: stri
   const handlePublish = (data: ButtonData): string => { const id = editing?.id ?? genId(); upsert(wizardDataToButton(data, { id, status: "Active", step: 0, existing: editing })); return id; };
 
   // row actions
-  const onView = (b: PaymentButton) => { if (b.status === "Draft") startEdit(b); else { setSelected(b); setScreen("detail"); } };
+  // Clicking a row always opens the detail view (with the Payments tab), matching
+  // Payment Pages. Editing stays available from the row kebab and the detail's Edit button.
+  const onView = (b: PaymentButton) => { setSelected(b); setScreen("detail"); };
   const onToggleStatus = (b: PaymentButton) => { const next = { ...b, status: (b.status === "Active" ? "Inactive" : "Active") as ButtonStatus }; upsert(next); setSelected(s => (s && s.id === b.id ? next : s)); };
   const confirmDelete = () => { if (toDelete) { setButtons(prev => prev.filter(x => x.id !== toDelete.id)); if (selected?.id === toDelete.id) exitToDashboard(); } setToDelete(null); };
 
