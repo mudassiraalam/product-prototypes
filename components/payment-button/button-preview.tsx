@@ -95,7 +95,8 @@ type Phase = "details" | "pay" | "done";
 
 function CheckoutHeader({ data, total }: { data: ButtonData; total: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    // paddingRight keeps the amount from sitting under the modal's close (✕) button
+    <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 36 }}>
       <span style={{ width: 30, height: 30, borderRadius: 8, background: C.blue, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{(data.merchantName || "E").charAt(0)}</span>
       <div style={{ minWidth: 0, flex: 1 }}>
         <p style={{ fontSize: 13.5, fontWeight: 800, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "EnKash Demo"}</p>
