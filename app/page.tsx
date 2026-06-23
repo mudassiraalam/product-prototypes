@@ -12,9 +12,10 @@ import { WizardData, DEFAULT_WIZARD } from "@/components/payment-pages/wizard-st
 import { pageToWizardData, wizardDataToPage } from "@/components/payment-pages/page-mappers";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QrApp } from "@/components/payment-qr/qr-app";
+import { ButtonApp } from "@/components/payment-button/button-app";
 
 type Screen = "dashboard" | "wizard" | "detail";
-type Product = "pages" | "qr";
+type Product = "pages" | "qr" | "button";
 
 export default function Home() {
   const [product, setProduct] = useState<Product>("pages");
@@ -123,7 +124,9 @@ export default function Home() {
 
   // Restore from URL on first load.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("product") === "qr") { setProduct("qr"); return; }
+    const prod = new URLSearchParams(window.location.search).get("product");
+    if (prod === "qr") { setProduct("qr"); return; }
+    if (prod === "button") { setProduct("button"); return; }
     applyUrl(window.location.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -142,7 +145,9 @@ export default function Home() {
   // Back / forward.
   useEffect(() => {
     const onPop = () => {
-      if (new URLSearchParams(window.location.search).get("product") === "qr") { setProduct("qr"); return; }
+      const prod = new URLSearchParams(window.location.search).get("product");
+      if (prod === "qr") { setProduct("qr"); return; }
+      if (prod === "button") { setProduct("button"); return; }
       setProduct("pages");
       applyUrl(window.location.search);
     };
@@ -156,6 +161,9 @@ export default function Home() {
     if (key === "payment-qr") {
       setProduct("qr");
       window.history.pushState({}, "", window.location.pathname + "?product=qr");
+    } else if (key === "payment-button") {
+      setProduct("button");
+      window.history.pushState({}, "", window.location.pathname + "?product=button");
     } else if (key === "payment-pages") {
       setProduct("pages");
       exitToDashboard();
@@ -170,6 +178,7 @@ export default function Home() {
   // demonstrable via the builder's device toggle.
   const isMobile = useIsMobile();
   if (product === "qr") return <QrApp onNavigateProduct={navigateProduct} />;
+  if (product === "button") return <ButtonApp onNavigateProduct={navigateProduct} />;
   if (isMobile) return <MobileGuard />;
 
   return (
