@@ -18,7 +18,7 @@ export type IconName =
   | "invoice" | "donation" | "ticket" | "bag" | "coins" | "card" | "receipt" | "handshake"
   // controls
   | "search" | "download" | "copy" | "archive" | "ban" | "checkCircle" | "refresh" | "expand" | "redirect" | "qr"
-  | "monitor" | "smartphone"
+  | "monitor" | "smartphone" | "button"
   // preview info / contact
   | "lock" | "calendar" | "mapPin" | "mail" | "phone" | "clock" | "user" | "globe" | "eye"
   | "edit" | "trash" | "pause" | "play" | "help"
@@ -30,7 +30,7 @@ const STROKE: IconName[] = [
   "invoice", "donation", "ticket", "bag", "coins", "card", "receipt", "handshake",
   "search", "download", "copy", "archive", "ban", "checkCircle", "refresh", "expand", "redirect", "qr",
   "monitor", "smartphone", "lock", "calendar", "mapPin", "mail", "phone", "clock", "user", "globe", "eye",
-  "edit", "trash", "pause", "play", "help",
+  "edit", "trash", "pause", "play", "help", "button",
 ];
 
 // Path/children for each icon, drawn on a 24×24 grid.
@@ -66,6 +66,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   qr: (<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v7h-7" /></>),
   monitor: (<><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>),
   smartphone: (<><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M11 18h2" /></>),
+  button: (<><rect x="2" y="5" width="16" height="10" rx="2.5" /><path d="M12 13l8 3.2-3.2 1.2-1.2 3.2z" /></>),
 
   lock: (<><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>),
   calendar: (<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 9h18M8 3v4M16 3v4" /></>),
