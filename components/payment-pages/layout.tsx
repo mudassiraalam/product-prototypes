@@ -26,6 +26,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { key: "payment-links", icon: "link", label: "Payment Links" },
       { key: "payment-pages", icon: "page", label: "Payment Pages" },
       { key: "payment-qr", icon: "qr", label: "Payment QR" },
+      { key: "payment-button", icon: "button", label: "Payment Button" },
     ],
   },
   {
