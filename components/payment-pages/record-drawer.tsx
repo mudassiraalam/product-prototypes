@@ -15,18 +15,20 @@ export type DrawerRecord = {
   amount: string;
   status: string;                               // Success / Failed / Refunded
   date: string;
-  source: { kind: "page" | "qr"; name: string; ref: string };
+  source: { kind: "page" | "qr" | "button"; name: string; ref: string };
   party: { label: string; value: string }[];   // customer / payer details
   details: { label: string; value: string }[]; // method / date / settlement …
   responses?: { label: string; value: string }[]; // page form responses (pages only)
 };
 
 function SourcePill({ source }: { source: DrawerRecord["source"] }) {
+  const iconName = source.kind === "page" ? "page" : source.kind === "qr" ? "qr" : "button";
+  const label = source.kind === "page" ? "Payment page" : source.kind === "qr" ? "Payment QR" : "Payment button";
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.blueLight, border: `1px solid ${C.blueMid}`, borderRadius: radius.md, padding: "6px 11px", maxWidth: "100%" }}>
-      <span style={{ color: C.blue, display: "inline-flex", flexShrink: 0 }}><Icon name={source.kind === "page" ? "page" : "qr"} size={15} /></span>
+      <span style={{ color: C.blue, display: "inline-flex", flexShrink: 0 }}><Icon name={iconName} size={15} /></span>
       <span style={{ fontSize: 12, color: C.blueDark, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {source.kind === "page" ? "Payment page" : "Payment QR"} · {source.name}
+        {label} · {source.name}
       </span>
       <span style={{ fontSize: 11, color: C.blueDark, fontFamily: "monospace", opacity: 0.7, flexShrink: 0 }}>{source.ref}</span>
     </div>
