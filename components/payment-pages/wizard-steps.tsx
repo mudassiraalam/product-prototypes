@@ -35,6 +35,12 @@ export interface WizardData {
   productImage: string;
   currency: "INR";
 
+  // Recurring billing
+  isRecurring: boolean;
+  recurringFrequency: "monthly" | "quarterly" | "yearly";
+  durationType: "until_cancelled" | "until_date";
+  endDate: string;
+
   // Pricing
   amountType: "fixed" | "customer" | "multiple";
   fixedAmount: string;
@@ -132,6 +138,11 @@ export const DEFAULT_WIZARD: WizardData = {
   coverZoom: 100,
   productImage: "",
   currency: "INR",
+
+  isRecurring: false,
+  recurringFrequency: "monthly",
+  durationType: "until_cancelled",
+  endDate: "",
 
   amountType: "fixed",
   fixedAmount: "",
@@ -775,6 +786,61 @@ export function StepPageDetails({ data, setData }: { data: WizardData; setData: 
             }}
           />
         </div>
+
+        {/* ── PAYMENT TYPE (one-time vs recurring) ─────────────────────────── */}
+        {/* [VERIFY] Monthly / Quarterly / Yearly are the initial supported
+            frequencies. Other options (weekly, bi-annual, custom cadence)
+            are TBD with Pallav. */}
+        <div style={{ marginBottom: 14 }}>
+          <Label>Payment type</Label>
+          <SegmentedControl
+            options={[
+              { key: "one-time", label: "One-time" },
+              { key: "recurring", label: "Recurring" },
+            ]}
+            value={data.isRecurring ? "recurring" : "one-time"}
+            onChange={v => setData({ ...data, isRecurring: v === "recurring" })}
+          />
+        </div>
+
+        {data.isRecurring && (
+          <div style={{ marginBottom: 14 }}>
+            <Label>Billing frequency</Label>
+            <SegmentedControl
+              options={[
+                { key: "monthly",   label: "Monthly" },
+                { key: "quarterly", label: "Quarterly" },
+                { key: "yearly",    label: "Yearly" },
+              ]}
+              value={data.recurringFrequency}
+              onChange={v => setData({ ...data, recurringFrequency: v as "monthly" | "quarterly" | "yearly" })}
+            />
+          </div>
+        )}
+
+        {data.isRecurring && (
+          <div style={{ marginBottom: 14 }}>
+            <Label>Runs for</Label>
+            <SegmentedControl
+              options={[
+                { key: "until_cancelled", label: "Until cancelled" },
+                { key: "until_date",      label: "Until a set date" },
+              ]}
+              value={data.durationType}
+              onChange={v => setData({ ...data, durationType: v as "until_cancelled" | "until_date", endDate: "" })}
+            />
+          </div>
+        )}
+
+        {data.isRecurring && data.durationType === "until_date" && (
+          <Inp
+            label="End date"
+            value={data.endDate}
+            onChange={v => setData({ ...data, endDate: v })}
+            type="date"
+            hint="Subscription stops renewing on or after this date"
+          />
+        )}
 
         {/* ── FIXED ─────────────────────────────────────────────────────────── */}
         {data.amountType === "fixed" && (

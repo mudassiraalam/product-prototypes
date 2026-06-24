@@ -40,6 +40,10 @@ export interface PaymentButton {
   created: string;
   brandColor: string;
   buttonStyle: ButtonStyle;
+  isRecurring?: boolean;
+  recurringFrequency?: "monthly" | "quarterly" | "yearly";
+  durationType?: "until_cancelled" | "until_date";
+  endDate?: string;
   draftData?: ButtonData;
   lastStep?: number;
 }
@@ -96,6 +100,13 @@ export const INITIAL_BUTTONS: PaymentButton[] = [
     merchantName: MERCHANT, amountMode: "customer", amount: "Set per order", origin: "api",
     payments: 5230, revenue: "₹41,18,600", status: "Active", created: "05 Nov 2024, 11:00",
     brandColor: ACCENT, buttonStyle: "solid",
+  },
+  {
+    id: "PB-ENK-RECUR", reference: "PBNF22HY", title: "Monthly Pro subscription", buttonLabel: "Subscribe",
+    merchantName: MERCHANT, amountMode: "fixed", amount: "₹999", amountValue: 999, origin: "dashboard",
+    payments: 47, revenue: "₹52,200", status: "Active", created: "03 Feb 2025, 09:45",
+    brandColor: ACCENT, buttonStyle: "solid",
+    isRecurring: true, recurringFrequency: "monthly", durationType: "until_cancelled",
   },
 ];
 

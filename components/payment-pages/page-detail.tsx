@@ -3,7 +3,10 @@ import { useState, ReactNode } from "react";
 import { C, radius, shadow } from "./tokens";
 import { Modal, StatusBadge, Btn, SegmentedControl } from "./primitives";
 import { Icon, IconName } from "./icons";
-import { PaymentPage, Submission, PAGE_SUBMISSIONS } from "./mock-data";
+import { PaymentPage, Submission, PAGE_SUBMISSIONS, PAGE_SUBSCRIBERS } from "./mock-data";
+import type { Subscriber } from "../subscriptions/types";
+import { CHARGES, PLANS } from "../subscriptions/mock-data";
+import { SubscriberDetail } from "../subscriptions/subscriber-detail";
 import { PagePreview } from "./page-preview";
 import { WizardData } from "./wizard-steps";
 import { pageToWizardData } from "./page-mappers";
@@ -347,12 +350,75 @@ export function EmptyTab({ icon, title, body }: { icon: IconName; title: string;
   );
 }
 
+function SubscribersTab({ subscribers, onOpen }: {
+  subscribers: Subscriber[];
+  onOpen: (sub: Subscriber) => void;
+}) {
+  if (subscribers.length === 0) {
+    return (
+      <EmptyTab
+        icon="receipt"
+        title="No subscribers yet"
+        body="When customers subscribe through this page, their subscription details appear here."
+      />
+    );
+  }
+  return (
+    <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 580 }}>
+          <thead>
+            <tr style={{ background: C.bg }}>
+              {["Subscriber", "Plan", "Frequency", "Status", "Started"].map(h => (
+                <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subscribers.map(sub => {
+              const plan = PLANS.find(p => p.id === sub.planId);
+              const capStatus = sub.status.charAt(0).toUpperCase() + sub.status.slice(1);
+              return (
+                <tr
+                  key={sub.id}
+                  onClick={() => onOpen(sub)}
+                  style={{ borderTop: `1px solid ${C.borderLight}`, cursor: "pointer", transition: "background 0.1s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#fafbfd")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={{ padding: "13px 16px" }}>
+                    <p style={{ fontSize: 13.5, fontWeight: 600, color: C.text, margin: "0 0 2px" }}>{sub.name}</p>
+                    <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{sub.email}</p>
+                  </td>
+                  <td style={{ padding: "13px 16px", fontSize: 13, color: C.textSecondary }}>{plan?.name ?? "—"}</td>
+                  <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted, textTransform: "capitalize" }}>{plan?.frequency ?? "—"}</td>
+                  <td style={{ padding: "13px 16px" }}><StatusBadge status={capStatus} /></td>
+                  <td style={{ padding: "13px 16px", fontSize: 12, color: C.textFaint, whiteSpace: "nowrap" }}>{sub.startDate}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ padding: "10px 16px", borderTop: `1px solid ${C.borderLight}` }}>
+        <span style={{ fontSize: 12, color: C.textFaint }}>
+          {subscribers.length} subscriber{subscribers.length === 1 ? "" : "s"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 const amountTypeLabel = (t: PaymentPage["amountType"]) => t === "fixed" ? "Fixed" : t === "customer" ? "Customer decides" : "Multiple items";
 
 // ── Page Detail View ───────────────────────────────────────────────────────────
 export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: PaymentPage; onBack: () => void; onEdit: (page: PaymentPage) => void }) {
   const [page] = useState(initialPage);
-  const [tab, setTab] = useState<"details" | "submissions" | "refunds" | "settlements">("details");
+  type TabKey = "details" | "submissions" | "subscribers" | "refunds" | "settlements";
+  const [tab, setTab] = useState<TabKey>("details");
+  const [selectedSubscriber, setSelectedSubscriber] = useState<Subscriber | null>(null);
   const [activeModal, setActiveModal] = useState<"qr" | "share" | "preview" | null>(null);
   const [record, setRecord] = useState<DrawerRecord | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -371,12 +437,14 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
   const amountDisplay = page.amountType === "customer" ? "Customer decides" : page.amount;
   const conversion = `${((page.payments / Math.max(page.views, 1)) * 100).toFixed(1)}%`;
   const pageUrl = `https://pay.enkash.in/${page.slug}`;
-  const TABS = [
-    { key: "details", label: "Page details" },
+  const pageSubscribers: Subscriber[] = PAGE_SUBSCRIBERS[page.id] ?? [];
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: "details",     label: "Page details" },
     { key: "submissions", label: "Submissions" },
-    { key: "refunds", label: "Refunds" },
+    ...(page.isRecurring ? [{ key: "subscribers" as const, label: "Subscribers" }] : []),
+    { key: "refunds",     label: "Refunds" },
     { key: "settlements", label: "Settlements" },
-  ] as const;
+  ];
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", background: C.bg }}>
@@ -433,11 +501,16 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
           {TABS.map(t => {
             const active = tab === t.key;
             return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{ background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted, borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <button key={t.key} onClick={() => { setTab(t.key); setSelectedSubscriber(null); }} style={{ background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted, borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {t.label}
                 {t.key === "submissions" && (
                   <span style={{ fontSize: 11, fontWeight: 700, background: active ? C.blueLight : C.bg, color: active ? C.blueDark : C.textMuted, borderRadius: radius.full, padding: "1px 8px" }}>
                     {Math.max(page.payments, submissions.length).toLocaleString()}
+                  </span>
+                )}
+                {t.key === "subscribers" && (
+                  <span style={{ fontSize: 11, fontWeight: 700, background: active ? C.blueLight : C.bg, color: active ? C.blueDark : C.textMuted, borderRadius: radius.full, padding: "1px 8px" }}>
+                    {pageSubscribers.length}
                   </span>
                 )}
               </button>
@@ -447,8 +520,21 @@ export function PageDetailView({ page: initialPage, onBack, onEdit }: { page: Pa
       </div>
 
       {/* Tab content */}
-      <div style={{ flex: 1, padding: "24px 32px" }}>
+      <div style={{ flex: 1, padding: (tab === "subscribers" && selectedSubscriber) ? 0 : "24px 32px" }}>
         {tab === "submissions" && <SubmissionsTab page={page} fieldLabels={fieldLabels} submissions={submissions} onOpen={openSubmission} />}
+
+        {tab === "subscribers" && (
+          selectedSubscriber ? (
+            <SubscriberDetail
+              subscriber={selectedSubscriber}
+              plan={PLANS.find(p => p.id === selectedSubscriber.planId)}
+              charges={CHARGES[selectedSubscriber.id] ?? []}
+              onBack={() => setSelectedSubscriber(null)}
+            />
+          ) : (
+            <SubscribersTab subscribers={pageSubscribers} onOpen={setSelectedSubscriber} />
+          )
+        )}
 
         {tab === "details" && (
           <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, padding: "20px 22px", maxWidth: 900 }}>

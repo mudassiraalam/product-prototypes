@@ -13,9 +13,10 @@ import { pageToWizardData, wizardDataToPage } from "@/components/payment-pages/p
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QrApp } from "@/components/payment-qr/qr-app";
 import { ButtonApp } from "@/components/payment-button/button-app";
+import { SubscriptionsApp } from "@/components/subscriptions/subscriptions-app";
 
 type Screen = "dashboard" | "wizard" | "detail";
-type Product = "pages" | "qr" | "button";
+type Product = "pages" | "qr" | "button" | "subscriptions";
 
 export default function Home() {
   const [product, setProduct] = useState<Product>("pages");
@@ -127,6 +128,7 @@ export default function Home() {
     const prod = new URLSearchParams(window.location.search).get("product");
     if (prod === "qr") { setProduct("qr"); return; }
     if (prod === "button") { setProduct("button"); return; }
+    if (prod === "subscriptions") { setProduct("subscriptions"); return; }
     applyUrl(window.location.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -148,6 +150,7 @@ export default function Home() {
       const prod = new URLSearchParams(window.location.search).get("product");
       if (prod === "qr") { setProduct("qr"); return; }
       if (prod === "button") { setProduct("button"); return; }
+      if (prod === "subscriptions") { setProduct("subscriptions"); return; }
       setProduct("pages");
       applyUrl(window.location.search);
     };
@@ -168,6 +171,9 @@ export default function Home() {
       setProduct("pages");
       exitToDashboard();
       window.history.pushState({}, "", window.location.pathname);
+    } else if (key === "subscriptions") {
+      setProduct("subscriptions");
+      window.history.pushState({}, "", window.location.pathname + "?product=subscriptions");
     }
   };
 
@@ -179,6 +185,7 @@ export default function Home() {
   const isMobile = useIsMobile();
   if (product === "qr") return <QrApp onNavigateProduct={navigateProduct} />;
   if (product === "button") return <ButtonApp onNavigateProduct={navigateProduct} />;
+  if (product === "subscriptions") return <SubscriptionsApp onNavigateProduct={navigateProduct} />;
   if (isMobile) return <MobileGuard />;
 
   return (

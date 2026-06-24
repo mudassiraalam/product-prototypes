@@ -6,6 +6,8 @@ import { adaptBrandColor, rgbString } from "./color-utils";
 import type { WizardData, PaymentMethod } from "./wizard-steps";
 import { getSymbol, ALL_PAYMENT_METHODS } from "./wizard-steps";
 import { qrMatrix } from "../payment-qr/qr-encoder";
+import type { Plan } from "../subscriptions/types";
+import { MandateSummary } from "../subscriptions/mandate-summary";
 import { OneTimeCollect, PoweredByUpi } from "../payment-qr/qr-preview";
 import { DEFAULT_QR, type QrData } from "../payment-qr/qr-wizard-steps";
 import { upiString, genQrRef } from "../payment-qr/qr-mock-data";
@@ -499,8 +501,24 @@ function BillingPanel({
   // Mobile: the customer picks a UPI app and Pay fires the upi:// intent link.
   const isDesktop = device === "desktop";
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [mandateOpen, setMandateOpen] = useState(false);
   const [upiApp, setUpiApp] = useState("gpay");
   const [redirecting, setRedirecting] = useState(false);
+
+  // For recurring pages: build a Plan from the WizardData fields so MandateSummary
+  // can display the right amount / frequency without importing the subscriptions
+  // plans list (this page is payer-facing and doesn't know which plan seed applies).
+  const isRecurring = !!data.isRecurring;
+  const syntheticPlan: Plan | null = isRecurring && data.recurringFrequency
+    ? {
+        id: data.pageSlug || "page-plan",
+        name: data.title || "Subscription",
+        amount: parseFloat(total.replace(/[^0-9.]/g, "")) || 0,
+        frequency: data.recurringFrequency,
+        durationType: data.durationType ?? "until_cancelled",
+        endDate: data.endDate ?? "",
+      }
+    : null;
 
   const upiAmount = (total.match(/[\d.,]+/)?.[0] || "").replace(/,/g, "");
   const canPayUpi = parseFloat(upiAmount || "0") > 0;
@@ -532,7 +550,8 @@ function BillingPanel({
     validityPreset: "15",
   };
 
-  const handlePay = () => setCheckoutOpen(true);
+  // Recurring pages gate through MandateSummary first; one-time pages go directly.
+  const handlePay = () => (isRecurring && syntheticPlan) ? setMandateOpen(true) : setCheckoutOpen(true);
   // Mobile UPI inside the checkout fires the upi:// intent (fresh ref each time).
   const fireMobileIntent = () => {
     setIntentRef(genQrRef());
@@ -554,6 +573,31 @@ function BillingPanel({
           </div>
         </div>
       </div>
+
+      {/* ── Recurring commitment strip (recurring pages only) ── */}
+      {isRecurring && syntheticPlan && syntheticPlan.amount > 0 && (
+        <div style={{
+          background: hexAlpha(data.brandColor, 0.07),
+          border: `1px solid ${hexAlpha(data.brandColor, 0.22)}`,
+          borderRadius: radius.sm,
+          padding: "9px 12px",
+          fontSize: 12,
+          color: textMuted,
+          lineHeight: 1.5,
+        }}>
+          <span style={{ fontWeight: 700, color: text }}>
+            ₹{syntheticPlan.amount.toLocaleString("en-IN")}
+          </span>
+          {" "}every{" "}
+          {syntheticPlan.frequency === "monthly" ? "month" : syntheticPlan.frequency === "quarterly" ? "3 months" : "year"}
+          <span style={{ color: textFaint }}>
+            {" · "}
+            {(syntheticPlan.durationType === "until_date" && syntheticPlan.endDate)
+              ? `until ${new Date(syntheticPlan.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`
+              : "until you cancel"}
+          </span>
+        </div>
+      )}
 
       {/* Amount selector label — skipped for fixed (the Total card already states it) */}
       {!isFixed && (
@@ -710,12 +754,27 @@ function BillingPanel({
         ))}
       </div>
 
+      {/* ── Mandate confirmation (recurring pages only) ──
+          Shown before the checkout so the payer sees what they're authorising.
+          MandateSummary owns no payment logic — its onApprove opens the
+          existing checkout below (the TEMP PG stand-in) unchanged. */}
+      {mandateOpen && syntheticPlan && (
+        <div
+          onClick={() => setMandateOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: 24 }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: "100%", marginTop: "auto", marginBottom: "auto" }}>
+            <MandateSummary
+              plan={syntheticPlan}
+              onApprove={() => { setMandateOpen(false); setCheckoutOpen(true); }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── TEMP PG checkout (stand-in) ──
-          Opened by the Pay button; stands in for EnKash's real PG hosted
-          checkout, to be stitched in later. Method tabs + per-method panel,
-          order summary, trust line, EnKash / Powered-by-UPI branding. Desktop
-          UPI renders the shared collect-screen QR inline; mobile UPI fires the
-          upi:// intent. */}
+          Opened by the Pay button (one-time) or MandateSummary.onApprove
+          (recurring). Stands in for EnKash's real PG hosted checkout. */}
       {checkoutOpen && (
         <div onClick={() => setCheckoutOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: 420, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "#ffffff", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,23,42,0.32)", padding: 20 }}>

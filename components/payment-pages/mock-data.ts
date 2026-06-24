@@ -1,4 +1,6 @@
 import type { WizardData } from "./wizard-steps";
+import type { Subscriber } from "../subscriptions/types";
+import { SUBSCRIBERS } from "../subscriptions/mock-data";
 
 export type PageStatus = "Active" | "Inactive" | "Draft" | "Expired" | "Archived";
 
@@ -31,6 +33,12 @@ export interface PaymentPage {
   draftData?: WizardData;
   // Step the merchant was on when they saved a draft, so resume lands there.
   lastStep?: number;
+  // Recurring billing — mirrors the fields added to WizardData.
+  // Optional so all existing one-time seed rows remain valid without changes.
+  isRecurring?: boolean;
+  recurringFrequency?: "monthly" | "quarterly" | "yearly";
+  durationType?: "until_cancelled" | "until_date";
+  endDate?: string;
 }
 
 // Seed examples — each demonstrates a different page configuration the
@@ -114,6 +122,30 @@ export const INITIAL_PAGES: PaymentPage[] = [
     theme: "dark",
     layout: "wide",
     description: "T-shirts, hoodies, mugs and notebooks featuring the EnKash brand.",
+  },
+
+  // ── Recurring · Monthly Membership ─────────────────────────────────────
+  {
+    id: "PP-ENK-MEMBER01",
+    title: "EnKash Pro — Monthly Membership",
+    slug: "enkash-pro-monthly",
+    amountType: "fixed",
+    isRecurring: true,
+    recurringFrequency: "monthly",
+    // Revenue ≈ 5 subscribers × avg 3 charges × ₹999. Matches the charge
+    // history in components/subscriptions/mock-data.ts (sub-001: 3, sub-002: 2
+    // quarterly at ₹2,499 each, sub-003: 2 successes, sub-004: 1 refunded).
+    amount: "₹999 / mo",
+    views: 312,
+    payments: 5,
+    revenue: "₹19,980",
+    status: "Active",
+    created: "01 Oct 2024, 09:00",
+    brandColor: "#7c3aed",
+    buttonLabel: "Subscribe Now",
+    theme: "light",
+    layout: "centered",
+    description: "Unlock full access to EnKash Pro features. Billed monthly. Cancel anytime.",
   },
 
   // ── Archived (last year's event) ────────────────────────────────────────
@@ -239,4 +271,15 @@ export const PAGE_SUBMISSIONS: Record<string, Submission[]> = {
 
   // Merch page is a Draft with 0 payments → intentionally no records, which is
   // what exercises the Submissions empty state.
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Per-page subscribers — parallel to PAGE_SUBMISSIONS but for recurring pages.
+// Keyed by page ID; values are Subscriber objects imported from the subscriptions
+// module. The Subscribers tab in PageDetailView reads from here.
+// ──────────────────────────────────────────────────────────────────────────────
+export const PAGE_SUBSCRIBERS: Record<string, Subscriber[]> = {
+  // All five seed subscribers are attributed to this page. Their charge history
+  // lives in CHARGES in components/subscriptions/mock-data.ts.
+  "PP-ENK-MEMBER01": SUBSCRIBERS,
 };

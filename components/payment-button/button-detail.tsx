@@ -8,6 +8,9 @@ import { buttonToWizardData } from "./button-mappers";
 import { MerchantSiteMock, ButtonCheckout } from "./button-preview";
 import { RecordDrawer, DrawerRecord } from "@/components/payment-pages/record-drawer";
 import { FieldRow, EmptyTab } from "@/components/payment-pages/page-detail";
+import { SUBSCRIBERS, CHARGES, PLANS } from "@/components/subscriptions/mock-data";
+import { SubscriberDetail } from "@/components/subscriptions/subscriber-detail";
+import type { Subscriber } from "@/components/subscriptions/types";
 
 // ── The embed snippet block — copy-to-clipboard, reused on the page and in the
 //    "Get code" modal. THE artifact a merchant pastes into their own site. ──
@@ -28,6 +31,67 @@ function EmbedBlock({ id }: { id: string }) {
   );
 }
 
+function SubscribersTab({ subscribers, onOpen }: {
+  subscribers: Subscriber[];
+  onOpen: (sub: Subscriber) => void;
+}) {
+  if (subscribers.length === 0) {
+    return (
+      <EmptyTab
+        icon="receipt"
+        title="No subscribers yet"
+        body="When customers subscribe through this button, their subscription details appear here."
+      />
+    );
+  }
+  return (
+    <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.lg, overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 580 }}>
+          <thead>
+            <tr style={{ background: C.bg }}>
+              {["Subscriber", "Plan", "Frequency", "Status", "Started"].map(h => (
+                <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subscribers.map(sub => {
+              const plan = PLANS.find(p => p.id === sub.planId);
+              const capStatus = sub.status.charAt(0).toUpperCase() + sub.status.slice(1);
+              return (
+                <tr
+                  key={sub.id}
+                  onClick={() => onOpen(sub)}
+                  style={{ borderTop: `1px solid ${C.borderLight}`, cursor: "pointer", transition: "background 0.1s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#fafbfd")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={{ padding: "13px 16px" }}>
+                    <p style={{ fontSize: 13.5, fontWeight: 600, color: C.text, margin: "0 0 2px" }}>{sub.name}</p>
+                    <p style={{ fontSize: 11, color: C.textFaint, margin: 0 }}>{sub.email}</p>
+                  </td>
+                  <td style={{ padding: "13px 16px", fontSize: 13, color: C.textSecondary }}>{plan?.name ?? "—"}</td>
+                  <td style={{ padding: "13px 16px", fontSize: 13, color: C.textMuted, textTransform: "capitalize" }}>{plan?.frequency ?? "—"}</td>
+                  <td style={{ padding: "13px 16px" }}><StatusBadge status={capStatus} /></td>
+                  <td style={{ padding: "13px 16px", fontSize: 12, color: C.textFaint, whiteSpace: "nowrap" }}>{sub.startDate}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ padding: "10px 16px", borderTop: `1px solid ${C.borderLight}` }}>
+        <span style={{ fontSize: 12, color: C.textFaint }}>
+          {subscribers.length} subscriber{subscribers.length === 1 ? "" : "s"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ButtonDetailView({ button, onBack, onEdit, onToggleStatus }: {
   button: PaymentButton; onBack: () => void; onEdit: (b: PaymentButton) => void; onToggleStatus: (b: PaymentButton) => void;
 }) {
@@ -39,12 +103,15 @@ export function ButtonDetailView({ button, onBack, onEdit, onToggleStatus }: {
   const txns = txnsForButton(button.id);
   const rate = successRateForButton(button.id);
 
+  const buttonSubscribers = SUBSCRIBERS.filter(s => s.source.ref === button.id);
+
   const [idCopied, setIdCopied] = useState(false);
   const copyId = () => { try { navigator.clipboard.writeText(button.id); setIdCopied(true); setTimeout(() => setIdCopied(false), 1500); } catch { /* */ } };
   const [codeOpen, setCodeOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [record, setRecord] = useState<DrawerRecord | null>(null);
-  const [tab, setTab] = useState<"details" | "payments" | "refunds" | "settlements">("details");
+  const [selectedSubscriber, setSelectedSubscriber] = useState<Subscriber | null>(null);
+  const [tab, setTab] = useState<"details" | "payments" | "subscribers" | "refunds" | "settlements">("details");
 
   const txnRecord = (t: (typeof txns)[number]): DrawerRecord => ({
     id: t.payId,
@@ -57,12 +124,13 @@ export function ButtonDetailView({ button, onBack, onEdit, onToggleStatus }: {
   });
 
   const statusColor = button.status === "Active" ? C.green : button.status === "Draft" ? C.amber : C.textMuted;
-  const TABS = [
-    { key: "details", label: "Button details" },
-    { key: "payments", label: "Payments" },
-    { key: "refunds", label: "Refunds" },
-    { key: "settlements", label: "Settlements" },
-  ] as const;
+  const TABS: { key: "details" | "payments" | "subscribers" | "refunds" | "settlements"; label: string }[] = [
+    { key: "details",      label: "Button details" },
+    { key: "payments",     label: "Payments" },
+    ...(button.isRecurring ? [{ key: "subscribers" as const, label: "Subscribers" }] : []),
+    { key: "refunds",      label: "Refunds" },
+    { key: "settlements",  label: "Settlements" },
+  ];
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: C.bg }}>
@@ -126,11 +194,16 @@ export function ButtonDetailView({ button, onBack, onEdit, onToggleStatus }: {
           {TABS.map(t => {
             const active = tab === t.key;
             return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{ background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted, borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <button key={t.key} onClick={() => { setTab(t.key); setSelectedSubscriber(null); }} style={{ background: "none", border: "none", padding: "0 2px 11px", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 600, color: active ? C.blue : C.textMuted, borderBottom: `2px solid ${active ? C.blue : "transparent"}`, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {t.label}
                 {t.key === "payments" && (
                   <span style={{ fontSize: 11, fontWeight: 700, background: active ? C.blueLight : C.bg, color: active ? C.blueDark : C.textMuted, borderRadius: radius.full, padding: "1px 8px" }}>
                     {button.payments.toLocaleString("en-IN")}
+                  </span>
+                )}
+                {t.key === "subscribers" && (
+                  <span style={{ fontSize: 11, fontWeight: 700, background: active ? C.blueLight : C.bg, color: active ? C.blueDark : C.textMuted, borderRadius: radius.full, padding: "1px 8px" }}>
+                    {buttonSubscribers.length}
                   </span>
                 )}
               </button>
@@ -140,7 +213,7 @@ export function ButtonDetailView({ button, onBack, onEdit, onToggleStatus }: {
       </div>
 
       {/* Tab content */}
-      <div style={{ flex: 1, padding: "24px 30px" }}>
+      <div style={{ flex: 1, padding: (tab === "subscribers" && selectedSubscriber) ? 0 : "24px 30px" }}>
         {tab === "details" && (
           <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
             <div style={{ background: "#e9ecf3", borderRadius: radius.xl, padding: "26px 24px", flexShrink: 0 }}>
@@ -191,6 +264,19 @@ export function ButtonDetailView({ button, onBack, onEdit, onToggleStatus }: {
               </div>
             ))}
           </div>
+        )}
+
+        {tab === "subscribers" && (
+          selectedSubscriber ? (
+            <SubscriberDetail
+              subscriber={selectedSubscriber}
+              plan={PLANS.find(p => p.id === selectedSubscriber.planId)}
+              charges={CHARGES[selectedSubscriber.id] ?? []}
+              onBack={() => setSelectedSubscriber(null)}
+            />
+          ) : (
+            <SubscribersTab subscribers={buttonSubscribers} onOpen={setSelectedSubscriber} />
+          )
         )}
 
         {tab === "refunds" && <EmptyTab icon="refresh" title="No refunds yet" body="Refunds raised against payments through this button will appear here." />}

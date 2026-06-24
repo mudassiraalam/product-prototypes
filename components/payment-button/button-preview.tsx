@@ -11,6 +11,8 @@ import { OneTimeCollect } from "@/components/payment-qr/qr-preview";
 import { DEFAULT_QR, type QrData } from "@/components/payment-qr/qr-wizard-steps";
 import { PRIMARY_VPA, upiString, genQrRef } from "@/components/payment-qr/qr-mock-data";
 import type { ButtonData } from "./button-wizard-steps";
+import type { Plan } from "@/components/subscriptions/types";
+import { MandateSummary } from "@/components/subscriptions/mandate-summary";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Payment Button — the two CUSTOMER-facing surfaces.
@@ -124,6 +126,19 @@ export function ButtonCheckout({ data, onClose }: { data: ButtonData; onClose: (
   const isDesktop = !isMobile;
   const sym = getSymbol();
 
+  const syntheticPlan: Plan | null = data.isRecurring && data.recurringFrequency
+    ? {
+        id: data.slug || "button-plan",
+        name: data.title || "Subscription",
+        amount: num(data.fixedAmount),
+        frequency: data.recurringFrequency,
+        durationType: data.durationType ?? "until_cancelled",
+        endDate: data.endDate ?? "",
+      }
+    : null;
+
+  const [mandateOpen, setMandateOpen] = useState(!!syntheticPlan);
+
   const methods = ALL_PAYMENT_METHODS.filter(m => data.paymentMethods.includes(m.key)).map(m => m.key);
   const presets = data.presetAmounts.filter(p => num(p) > 0);
 
@@ -160,6 +175,21 @@ export function ButtonCheckout({ data, onClose }: { data: ButtonData; onClose: (
   const fieldDefs = data.fields.map(f => ({ type: f.type, label: f.label || "Field", optional: f.optional }));
 
   return (
+    <>
+      {mandateOpen && syntheticPlan && (
+        <div
+          onClick={onClose}
+          style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: 24 }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: "100%", marginTop: "auto", marginBottom: "auto" }}>
+            <MandateSummary
+              plan={syntheticPlan}
+              onApprove={() => setMandateOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+      {!mandateOpen && (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: 420, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "#ffffff", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,23,42,0.32)", padding: 20 }}>
         <button onClick={onClose} aria-label="Close" style={{ position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: "50%", background: "#f1f3f7", border: "none", cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, fontFamily: "inherit" }}>✕</button>
@@ -283,5 +313,7 @@ export function ButtonCheckout({ data, onClose }: { data: ButtonData; onClose: (
         )}
       </div>
     </div>
+      )}
+    </>
   );
 }

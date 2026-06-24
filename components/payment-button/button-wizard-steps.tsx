@@ -59,6 +59,10 @@ export interface ButtonData {
   successMessage: string;          // Custom Success Message ONLY (no receipt/redirect/webhook here)
   slug: string;
   slugTouched?: boolean;
+  isRecurring: boolean;
+  recurringFrequency: "monthly" | "quarterly" | "yearly";
+  durationType: "until_cancelled" | "until_date";
+  endDate: string;
 }
 
 export const FIELD_TYPES: { value: string; label: string }[] = [
@@ -94,6 +98,10 @@ export const DEFAULT_BUTTON: ButtonData = {
   paymentMethods: ["upi", "cards", "netbanking", "wallets"],
   successMessage: "",
   slug: "",
+  isRecurring: false,
+  recurringFrequency: "monthly",
+  durationType: "until_cancelled",
+  endDate: "",
 };
 
 export function getButtonSteps(): { key: string; label: string }[] {
@@ -153,6 +161,52 @@ export function StepButtonBasics({ data, setData }: { data: ButtonData; setData:
           hint="Only you see this — it labels the button on your dashboard." />
         <Inp label="Business name" value={data.merchantName} onChange={() => {}} disabled
           hint="Verified at onboarding — shown to the payer in the checkout." />
+      </SectionCard>
+
+      <SectionCard title="Payment type">
+        <div style={{ marginBottom: 14 }}>
+          <SegmentedControl
+            value={data.isRecurring ? "recurring" : "onetime"}
+            onChange={v => set({ isRecurring: v === "recurring", endDate: "" })}
+            options={[{ key: "onetime", label: "One-time" }, { key: "recurring", label: "Recurring" }]}
+          />
+        </div>
+        {data.isRecurring && (
+          <>
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecondary, margin: "0 0 6px" }}>Billing frequency</p>
+              <SegmentedControl
+                value={data.recurringFrequency}
+                onChange={v => set({ recurringFrequency: v as "monthly" | "quarterly" | "yearly" })}
+                options={[
+                  { key: "monthly",   label: "Monthly" },
+                  { key: "quarterly", label: "Quarterly" },
+                  { key: "yearly",    label: "Yearly" },
+                ]}
+              />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecondary, margin: "0 0 6px" }}>Runs for</p>
+              <SegmentedControl
+                value={data.durationType}
+                onChange={v => set({ durationType: v as "until_cancelled" | "until_date", endDate: "" })}
+                options={[
+                  { key: "until_cancelled", label: "Until cancelled" },
+                  { key: "until_date",      label: "Until a set date" },
+                ]}
+              />
+            </div>
+            {data.durationType === "until_date" && (
+              <Inp
+                label="End date"
+                value={data.endDate}
+                onChange={v => set({ endDate: v })}
+                type="date"
+                hint="Subscription stops renewing on or after this date"
+              />
+            )}
+          </>
+        )}
       </SectionCard>
 
       <SectionCard title="What does the button charge?">
