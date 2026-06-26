@@ -38,9 +38,9 @@ export function hexAlpha(hex: string, alpha: number) {
 // MAIN ENTRY
 // ──────────────────────────────────────────────────────────────────────────────
 export function PagePreview({
-  data, device = "desktop",
+  data, device = "desktop", previewExpired = false,
 }: {
-  data: WizardData; device?: "desktop" | "mobile";
+  data: WizardData; device?: "desktop" | "mobile"; previewExpired?: boolean;
 }) {
   // Live, interactive item quantities (multiple-items / tickets). Start at 0.
   const [quantities, setQuantities] = useState<Record<number, number>>({});
@@ -68,6 +68,16 @@ export function PagePreview({
   const btnRadius = data.buttonStyle === "pill" ? 999 : data.buttonStyle === "sharp" ? 4 : 10;
   const total = computeTotalLive(data, quantities, chosenAmount);
 
+  if (previewExpired) {
+    return (
+      <ExpiredView
+        data={data} pageBg={pageBg} cardBg={cardBg} subtleBg={subtleBg}
+        text={text} textMuted={textMuted} textFaint={textFaint} border={border}
+        font={font} onBrand={onBrand} dark={dark}
+      />
+    );
+  }
+
   if (device === "mobile") {
     return (
       <MobilePreview
@@ -88,6 +98,163 @@ export function PagePreview({
       panelBg={panelBg} headerBg={headerBg} dark={dark}
       quantities={quantities} setQty={setQty} chosenAmount={chosenAmount} setChosenAmount={setChosenAmount}
     />
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GRIEVANCE MODAL — Step 2
+// ──────────────────────────────────────────────────────────────────────────────
+function GrievanceModal({ onClose }: { onClose: () => void }) {
+  const [submitted, setSubmitted] = useState(false);
+  const [grvRef, setGrvRef] = useState("");
+  const [form, setForm] = useState({ name: "", contact: "", payRef: "", issue: "" });
+
+  const submit = () => {
+    setGrvRef("GRV-" + Math.random().toString(36).slice(2, 6).toUpperCase());
+    setSubmitted(true);
+  };
+
+  const fieldStyle: React.CSSProperties = {
+    width: "100%", padding: "10px 12px", border: "1px solid #d6dbe5", borderRadius: radius.sm,
+    fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", color: C.text, background: "#fff",
+  };
+  const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: C.textSecondary, display: "block", marginBottom: 5 };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 20000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: 480, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,23,42,0.32)", padding: "24px 24px 28px" }}>
+        <button onClick={onClose} aria-label="Close" style={{ position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: "50%", background: "#f1f3f7", border: "none", cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, fontFamily: "inherit" }}>✕</button>
+
+        <h3 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: "0 0 16px" }}>Raise a grievance</h3>
+
+        {submitted ? (
+          <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.greenBg, display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
+              <Icon name="checkCircle" size={30} color={C.green} />
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: "0 0 8px" }}>Grievance received.</p>
+            <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 6px" }}>Reference: <strong style={{ color: C.text, fontFamily: "monospace" }}>{grvRef}</strong></p>
+            <p style={{ fontSize: 13, color: C.textMuted, margin: "0 0 20px" }}>EnKash will acknowledge within [VERIFY — SLA].</p>
+            <button onClick={onClose} style={{ width: "100%", padding: "12px", background: C.blue, color: "#fff", border: "none", borderRadius: radius.md, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
+            <p style={{ fontSize: 11, color: C.textFaint, margin: "10px 0 0" }}>This is a demo.</p>
+          </div>
+        ) : (
+          <>
+            {/* [VERIFY] compliance banner */}
+            <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: radius.sm, padding: "10px 12px", marginBottom: 18 }}>
+              <p style={{ fontSize: 12, color: "#92400e", margin: 0, fontWeight: 600 }}>
+                [VERIFY — compliance] RBI PA grievance copy, grievance officer &amp; SLA
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={labelStyle}>Your name</label>
+                <input style={fieldStyle} type="text" placeholder="Full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Email or phone</label>
+                <input style={fieldStyle} type="text" placeholder="email@example.com or 98765 43210" value={form.contact} onChange={e => setForm(f => ({ ...f, contact: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Payment reference</label>
+                <input style={fieldStyle} type="text" placeholder="PE-XXXXXXXX" value={form.payRef} onChange={e => setForm(f => ({ ...f, payRef: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>What&apos;s the issue?</label>
+                <textarea style={{ ...fieldStyle, minHeight: 90, resize: "vertical" }} placeholder="Describe your issue or complaint..." value={form.issue} onChange={e => setForm(f => ({ ...f, issue: e.target.value }))} />
+              </div>
+            </div>
+
+            <button onClick={submit} style={{ width: "100%", marginTop: 20, padding: "13px", background: C.blue, color: "#fff", border: "none", borderRadius: radius.md, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Submit grievance
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// EXPIRED VIEW — shown when previewExpired=true (wizard toggle) or when the
+// real page's expiryDate has passed. Does NOT auto-expire anything — the prop
+// is the only trigger in the prototype.
+// ──────────────────────────────────────────────────────────────────────────────
+function ExpiredView({ data, pageBg, cardBg, subtleBg, text, textMuted, textFaint, border, font, onBrand, dark }: {
+  data: WizardData; pageBg: string; cardBg: string; subtleBg: string;
+  text: string; textMuted: string; textFaint: string; border: string;
+  font: string; onBrand: string; dark?: boolean;
+}) {
+  const [grievanceOpen, setGrievanceOpen] = useState(false);
+
+  const fmtDate = data.expiryDate
+    ? new Date(data.expiryDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })
+    : "a past date";
+
+  return (
+    <div style={{ background: pageBg, width: "100%", minHeight: "100%", fontFamily: font, padding: "20px 16px 32px" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", background: cardBg, borderRadius: radius.lg, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: `1px solid ${border}` }}>
+
+        {/* Header — same as live page */}
+        <div style={{ background: dark ? "#101a2e" : "#fafbfc", borderRadius: `${radius.lg}px ${radius.lg}px 0 0`, borderBottom: `1px solid ${border}`, padding: "18px 28px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            {data.showLogo && (
+              <div style={{ width: 38, height: 38, background: data.brandColor, color: onBrand, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15, fontWeight: 800 }}>
+                {(data.merchantName || "E").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <span style={{ fontSize: 16, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "Your Brand"}</span>
+          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
+            <Icon name="lock" size={12} />
+            Secured by <span style={{ fontWeight: 700, color: C.blue }}>EnKash</span>
+          </span>
+        </div>
+
+        {/* Expired body */}
+        <div style={{ padding: "52px 28px 48px", textAlign: "center" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: dark ? "#1f2c45" : "#f1f3f7", display: "grid", placeItems: "center", margin: "0 auto 20px" }}>
+            <Icon name="clock" size={30} color={textFaint} />
+          </div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: text, margin: "0 0 10px", letterSpacing: "-0.01em" }}>This payment page has expired</h2>
+          <p style={{ fontSize: 13.5, color: textMuted, margin: "0 0 0", lineHeight: 1.7, maxWidth: 440, marginLeft: "auto", marginRight: "auto" }}>
+            <strong style={{ color: text }}>{data.title || "This page"}</strong> · closed on {fmtDate}. Payments are no longer accepted.
+          </p>
+
+          <div style={{ borderTop: `1px solid ${border}`, margin: "32px auto", maxWidth: 440 }} />
+
+          {/* Grievance redressal surface — operationalizes EnKash's RBI Payment Aggregator
+              grievance-redressal obligation: an expired page URL must still give the
+              customer a route to complain. Copy/officer/SLA are [VERIFY — compliance]. */}
+          <p style={{ fontSize: 13, color: textMuted, margin: "0 0 18px", maxWidth: 400, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>
+            Already paid and need help, or have a complaint about this merchant?
+          </p>
+          <button
+            onClick={() => setGrievanceOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 22px", background: "#1c5af4", color: "#fff", border: "none", borderRadius: radius.md, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            <Icon name="flag" size={14} color="#fff" />
+            Raise a grievance with EnKash
+          </button>
+        </div>
+
+        {/* Footer */}
+        <div style={{ borderTop: `1px solid ${border}`, padding: "14px 28px", textAlign: "center", borderRadius: `0 0 ${radius.lg}px ${radius.lg}px` }}>
+          <p style={{ fontSize: 11, color: textFaint, margin: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            Powered by
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, color: text }}>
+              <span style={{ width: 16, height: 16, background: "#fff", borderRadius: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${border}`, overflow: "hidden" }}>
+                <EnkashLogo variant="mark" height={11} />
+              </span>
+              EnKash
+            </span>
+          </p>
+        </div>
+      </div>
+
+      {grievanceOpen && <GrievanceModal onClose={() => setGrievanceOpen(false)} />}
+    </div>
   );
 }
 
@@ -504,6 +671,13 @@ function BillingPanel({
   const [mandateOpen, setMandateOpen] = useState(false);
   const [upiApp, setUpiApp] = useState("gpay");
   const [redirecting, setRedirecting] = useState(false);
+  const [payDone, setPayDone] = useState(false);
+  const [payRef, setPayRef] = useState("");
+  const completePayment = () => {
+    setPayRef("PE-" + Math.random().toString(36).slice(2, 8).toUpperCase());
+    setPayDone(true);
+  };
+  const closeCheckout = () => { setCheckoutOpen(false); setPayDone(false); };
 
   // For recurring pages: build a Plan from the WizardData fields so MandateSummary
   // can display the right amount / frequency without importing the subscriptions
@@ -561,43 +735,46 @@ function BillingPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* ── Total card (gradient elevation surface) ── */}
+      {/* ── Total / recurring box ── */}
       <div style={{ marginBottom: 4 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: textFaint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Total</p>
-        <div style={{ background: totalBoxBg, border: `1px solid ${totalBoxBorder}`, borderRadius: radius.md, padding: "14px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
-            <span style={{ fontSize: 12, color: textMuted, paddingBottom: 3 }}>
-              {isDonationFlow ? "Your donation" : "Total payable"}
-            </span>
-            <span style={{ fontSize: 26, fontWeight: 800, color: amountColor, lineHeight: 1 }}>{total}</span>
-          </div>
-        </div>
-      </div>
 
-      {/* ── Recurring commitment strip (recurring pages only) ── */}
-      {isRecurring && syntheticPlan && syntheticPlan.amount > 0 && (
-        <div style={{
-          background: hexAlpha(data.brandColor, 0.07),
-          border: `1px solid ${hexAlpha(data.brandColor, 0.22)}`,
-          borderRadius: radius.sm,
-          padding: "9px 12px",
-          fontSize: 12,
-          color: textMuted,
-          lineHeight: 1.5,
-        }}>
-          <span style={{ fontWeight: 700, color: text }}>
-            ₹{syntheticPlan.amount.toLocaleString("en-IN")}
-          </span>
-          {" "}every{" "}
-          {syntheticPlan.frequency === "monthly" ? "month" : syntheticPlan.frequency === "quarterly" ? "3 months" : "year"}
-          <span style={{ color: textFaint }}>
-            {" · "}
-            {(syntheticPlan.durationType === "until_date" && syntheticPlan.endDate)
-              ? `until ${new Date(syntheticPlan.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`
-              : "until you cancel"}
-          </span>
-        </div>
-      )}
+        {isRecurring && syntheticPlan && syntheticPlan.amount > 0 ? (
+          /* Combined recurring box — replaces the two-box layout for recurring pages */
+          <div style={{ background: totalBoxBg, border: `1px solid ${totalBoxBorder}`, borderRadius: radius.md, padding: "14px 16px" }}>
+            <p style={{ fontSize: 11, color: textMuted, margin: "0 0 4px" }}>You&apos;ll be charged</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
+              <div style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: 26, fontWeight: 800, color: amountColor }}>
+                  {total}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: textMuted, marginLeft: 4 }}>
+                  {"/ "}{syntheticPlan.frequency === "monthly" ? "month" : syntheticPlan.frequency === "quarterly" ? "3 months" : "year"}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8 }}>
+              <Icon name="refresh" size={11} color={textFaint} />
+              <span style={{ fontSize: 11, color: textFaint }}>
+                {"Recurring · "}
+                {(syntheticPlan.durationType === "until_date" && syntheticPlan.endDate)
+                  ? `until ${new Date(syntheticPlan.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`
+                  : "until cancelled"}
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* One-time box — unchanged */
+          <div style={{ background: totalBoxBg, border: `1px solid ${totalBoxBorder}`, borderRadius: radius.md, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
+              <span style={{ fontSize: 12, color: textMuted, paddingBottom: 3 }}>
+                {isDonationFlow ? "Your donation" : "Total payable"}
+              </span>
+              <span style={{ fontSize: 26, fontWeight: 800, color: amountColor, lineHeight: 1 }}>{total}</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Amount selector label — skipped for fixed (the Total card already states it) */}
       {!isFixed && (
@@ -651,6 +828,8 @@ function BillingPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {(data.items.filter(t => t.label || t.amount).length === 0 ? [{ label: "General Admission", amount: "0", capacity: "", description: "" }] : data.items).map((t, i) => {
             const cap = parseInt(t.capacity || "") || Infinity;
+            const perCustomer = parseInt(t.maxQty || "") || Infinity;
+            const effectiveMax = Math.min(cap, perCustomer);
             const cur = qty[i] ?? 0;
             return (
             <div key={i} style={{ border: `1px solid ${fieldBorder}`, borderRadius: radius.sm, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, background: fieldSurface }}>
@@ -659,12 +838,12 @@ function BillingPanel({
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>{t.label || `Ticket ${i + 1}`}</p>
-                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} available` : ""}</p>
+                <p style={{ fontSize: 11, color: textMuted, margin: "2px 0 0" }}>{symbol}{t.amount || "0"}{t.capacity ? ` · ${t.capacity} available` : ""}{parseInt(t.maxQty || "") > 0 ? ` · Max ${t.maxQty} per order` : ""}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: subtleBg, borderRadius: radius.sm, padding: "2px 4px" }}>
-                <button onClick={() => bump(i, -1, 0, cap)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
+                <button onClick={() => bump(i, -1, 0, effectiveMax)} style={{ fontSize: 15, color: textMuted, padding: "0 6px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>−</button>
                 <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 14, textAlign: "center" }}>{cur}</span>
-                <button onClick={() => bump(i, 1, 0, cap)} disabled={cur >= cap} style={{ fontSize: 15, color: cur >= cap ? textFaint : data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: cur >= cap ? "default" : "pointer", fontFamily: "inherit", lineHeight: 1, opacity: cur >= cap ? 0.4 : 1 }}>+</button>
+                <button onClick={() => bump(i, 1, 0, effectiveMax)} disabled={cur >= effectiveMax} style={{ fontSize: 15, color: cur >= effectiveMax ? textFaint : data.brandColor, padding: "0 6px", background: "none", border: "none", cursor: cur >= effectiveMax ? "default" : "pointer", fontFamily: "inherit", lineHeight: 1, opacity: cur >= effectiveMax ? 0.4 : 1 }}>+</button>
               </div>
             </div>
             );
@@ -776,72 +955,124 @@ function BillingPanel({
           Opened by the Pay button (one-time) or MandateSummary.onApprove
           (recurring). Stands in for EnKash's real PG hosted checkout. */}
       {checkoutOpen && (
-        <div onClick={() => setCheckoutOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div onClick={closeCheckout} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: 420, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "#ffffff", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,23,42,0.32)", padding: 20 }}>
-            <button onClick={() => setCheckoutOpen(false)} aria-label="Close" style={{ position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: "50%", background: "#f1f3f7", border: "none", cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, fontFamily: "inherit" }}>✕</button>
+            <button onClick={closeCheckout} aria-label="Close" style={{ position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: "50%", background: "#f1f3f7", border: "none", cursor: "pointer", fontSize: 13, color: C.textSecondary, lineHeight: 1, fontFamily: "inherit" }}>✕</button>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ width: 30, height: 30, borderRadius: 8, background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{(data.merchantName || "E").charAt(0)}</span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ fontSize: 13.5, fontWeight: 800, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "EnKash Demo"}</p>
-                <p style={{ fontSize: 11, color: C.textMuted, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.title || "Payment"}</p>
-              </div>
-              <span style={{ fontSize: 20, fontWeight: 800, color: C.text, flexShrink: 0 }}>{total}</span>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "16px 0 14px" }}>
-              {ALL_PAYMENT_METHODS.filter(m => methods.includes(m.key)).map(m => {
-                const selected = activeMethod === m.key;
-                return (
-                  <button key={m.key} onClick={() => setPayMethod(m.key)} style={{
-                    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px",
-                    border: `1.5px solid ${selected ? data.brandColor : "#e3e7ee"}`,
-                    background: selected ? hexAlpha(data.brandColor, 0.08) : "#f7f8fa",
-                    color: selected ? data.brandColor : C.text, borderRadius: 999,
-                    fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
-                  }}>
-                    {selected && <span style={{ width: 14, height: 14, borderRadius: "50%", background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800 }}>✓</span>}
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {activeMethod === "upi" ? (
-              isDesktop ? (
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <OneTimeCollect data={{ ...checkoutQr, screenTheme: "light" }} mode="live" showCaption={false} surface="payer" />
+            {payDone ? (
+              /* ── Success state ── */
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <div style={{ width: 60, height: 60, borderRadius: "50%", background: C.greenBg, display: "grid", placeItems: "center", margin: "8px auto 16px" }}>
+                  <Icon name="checkCircle" size={34} color={C.green} />
                 </div>
-              ) : (
-                <>
-                  <UpiCheckout
-                    isDesktop={false} canPay={canPayUpi} onOpen={() => {}}
-                    upiApp={upiApp} setUpiApp={setUpiApp} redirecting={redirecting}
-                    upiLink={upiLink} qrPreviewValue={upiLink}
-                    brand={data.brandColor} text={C.text} textMuted={C.textMuted} textFaint={C.textMuted}
-                    fieldSurface="#ffffff" fieldBorder="#e3e7ee" subtleBg="#f1f3f7" compact={false} dark={false}
-                  />
-                  {!redirecting && (
-                    <button onClick={fireMobileIntent} style={{ width: "100%", marginTop: 12, padding: "13px", background: data.brandColor, color: onBrand, border: "none", borderRadius: btnRadius, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Pay {total}</button>
-                  )}
-                </>
-              )
-            ) : (
-              <MethodInput
-                method={activeMethod} brand={data.brandColor}
-                banks={data.netbankingBanks} wallets={data.wallets}
-                text={C.text} textMuted={C.textMuted} textFaint={C.textMuted}
-                fieldSurface="#ffffff" fieldBorder="#e3e7ee" subtleBg="#f1f3f7" compact={false}
-              />
-            )}
+                <h3 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: "0 0 8px" }}>Payment successful</h3>
+                <p style={{ fontSize: 13.5, color: C.textMuted, margin: "0 0 20px", lineHeight: 1.6 }}>
+                  {data.successMessage?.trim() || "Thank you! Your payment is confirmed."}
+                </p>
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16, flexWrap: "wrap" }}>
-              {["256-bit SSL", "PCI DSS", "RBI-authorised Payment Aggregator"].map(b => (
-                <span key={b} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: C.textMuted, fontWeight: 600 }}>
-                  <span style={{ color: "#16a34a", fontSize: 11 }}>✓</span>{b}
-                </span>
-              ))}
-            </div>
+                {/* Order summary */}
+                <div style={{ border: "1px solid #e3e7ee", borderRadius: radius.md, overflow: "hidden", marginBottom: 14, textAlign: "left" }}>
+                  {data.amountType === "multiple" && data.items
+                    .map((item, i) => ({ item, i, q: qty[i] ?? 0 }))
+                    .filter(({ q }) => q > 0)
+                    .map(({ item, i, q }) => {
+                      const linePrice = parseFloat(item.amount || "0") * q;
+                      return (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 14px", borderBottom: "1px solid #e3e7ee" }}>
+                          <span style={{ fontSize: 13, color: C.textSecondary }}>{item.label || `Item ${i + 1}`} × {q}</span>
+                          <span style={{ fontSize: 13, color: C.textSecondary }}>{symbol}{linePrice.toLocaleString("en-IN")}</span>
+                        </div>
+                      );
+                    })
+                  }
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 14px" }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>Amount paid</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{total}</span>
+                  </div>
+                </div>
+
+                {/* Payment reference */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #e3e7ee", borderRadius: radius.md, padding: "11px 14px", marginBottom: 20 }}>
+                  <span style={{ fontSize: 12.5, color: C.textMuted }}>Payment reference</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: "monospace", letterSpacing: "0.04em" }}>{payRef}</span>
+                </div>
+
+                <button onClick={closeCheckout} style={{ width: "100%", padding: "13px", background: C.blue, color: "#fff", border: "none", borderRadius: radius.md, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
+                <p style={{ fontSize: 11.5, color: C.textFaint, margin: "12px 0 0" }}>This is a demo — no real payment was made.</p>
+              </div>
+            ) : (
+              /* ── Checkout UI ── */
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 8, background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{(data.merchantName || "E").charAt(0)}</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <p style={{ fontSize: 13.5, fontWeight: 800, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.merchantName || "EnKash Demo"}</p>
+                    <p style={{ fontSize: 11, color: C.textMuted, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.title || "Payment"}</p>
+                  </div>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: C.text, flexShrink: 0 }}>{total}</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "16px 0 14px" }}>
+                  {ALL_PAYMENT_METHODS.filter(m => methods.includes(m.key)).map(m => {
+                    const selected = activeMethod === m.key;
+                    return (
+                      <button key={m.key} onClick={() => setPayMethod(m.key)} style={{
+                        display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px",
+                        border: `1.5px solid ${selected ? data.brandColor : "#e3e7ee"}`,
+                        background: selected ? hexAlpha(data.brandColor, 0.08) : "#f7f8fa",
+                        color: selected ? data.brandColor : C.text, borderRadius: 999,
+                        fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                      }}>
+                        {selected && <span style={{ width: 14, height: 14, borderRadius: "50%", background: data.brandColor, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800 }}>✓</span>}
+                        {m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {activeMethod === "upi" ? (
+                  isDesktop ? (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        <OneTimeCollect data={{ ...checkoutQr, screenTheme: "light" }} mode="live" showCaption={false} surface="payer" />
+                      </div>
+                      <button onClick={completePayment} style={{ width: "100%", marginTop: 12, padding: "13px", background: data.brandColor, color: onBrand, border: "none", borderRadius: btnRadius, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Simulate payment</button>
+                    </>
+                  ) : (
+                    <>
+                      <UpiCheckout
+                        isDesktop={false} canPay={canPayUpi} onOpen={() => {}}
+                        upiApp={upiApp} setUpiApp={setUpiApp} redirecting={redirecting}
+                        upiLink={upiLink} qrPreviewValue={upiLink}
+                        brand={data.brandColor} text={C.text} textMuted={C.textMuted} textFaint={C.textMuted}
+                        fieldSurface="#ffffff" fieldBorder="#e3e7ee" subtleBg="#f1f3f7" compact={false} dark={false}
+                      />
+                      {!redirecting && (
+                        <button onClick={fireMobileIntent} style={{ width: "100%", marginTop: 12, padding: "13px", background: data.brandColor, color: onBrand, border: "none", borderRadius: btnRadius, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Pay {total}</button>
+                      )}
+                    </>
+                  )
+                ) : (
+                  <>
+                    <MethodInput
+                      method={activeMethod} brand={data.brandColor}
+                      banks={data.netbankingBanks} wallets={data.wallets}
+                      text={C.text} textMuted={C.textMuted} textFaint={C.textMuted}
+                      fieldSurface="#ffffff" fieldBorder="#e3e7ee" subtleBg="#f1f3f7" compact={false}
+                    />
+                    <button onClick={completePayment} style={{ width: "100%", marginTop: 16, padding: "13px", background: data.brandColor, color: onBrand, border: "none", borderRadius: btnRadius, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Pay {total}</button>
+                  </>
+                )}
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16, flexWrap: "wrap" }}>
+                  {["256-bit SSL", "PCI DSS", "RBI-authorised Payment Aggregator"].map(b => (
+                    <span key={b} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: C.textMuted, fontWeight: 600 }}>
+                      <span style={{ color: "#16a34a", fontSize: 11 }}>✓</span>{b}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

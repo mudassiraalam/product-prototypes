@@ -661,7 +661,7 @@ function ItemRow({
         placeholder={isTickets ? "e.g. Early Bird, VIP, General" : "e.g. T-shirt — Medium"}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: isTickets ? "1fr 1fr" : "1fr", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isTickets ? "1fr 1fr 1fr" : "1fr", gap: 10 }}>
         <Inp
           label="Price"
           value={item.amount}
@@ -678,6 +678,16 @@ function ItemRow({
             placeholder="100"
             type="number"
             hint="Max tickets available for this tier — buyers can't select more than this"
+          />
+        )}
+        {isTickets && (
+          <Inp
+            label="Max per customer"
+            value={item.maxQty ?? ""}
+            onChange={v => onUpdate({ maxQty: v })}
+            placeholder="No limit"
+            type="number"
+            hint="Most one buyer can take in a single order (leave blank for no limit)"
           />
         )}
       </div>

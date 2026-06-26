@@ -12,6 +12,121 @@ import {
 } from "./wizard-steps";
 
 // ──────────────────────────────────────────────────────────────────────────────
+// AI Entry Screen — merchant describes their page; we fill the wizard for them
+// ──────────────────────────────────────────────────────────────────────────────
+function AiEntryScreen({
+  onGenerate, onSkip, onExit,
+}: {
+  onGenerate: (config: Partial<WizardData>, assumptions: string[]) => void;
+  onSkip: () => void;
+  onExit: () => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGenerate = async () => {
+    const trimmed = prompt.trim();
+    if (!trimmed || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/generate-page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: trimmed }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Server error ${res.status}`);
+      onGenerate(json.config ?? {}, json.assumptions ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again or set up manually.");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Minimal header */}
+      <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, background: C.white, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <button
+          onClick={onExit}
+          style={{ background: "none", border: "none", color: C.textMuted, fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 500, padding: "4px 0", display: "flex", alignItems: "center", gap: 5 }}
+        >
+          ← Exit
+        </button>
+        <div style={{ height: 16, width: 1, background: C.border }} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.textFaint, textTransform: "uppercase", letterSpacing: "0.05em" }}>Creating</span>
+        <span style={{ fontWeight: 700, color: C.blue, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <Icon name="page" size={15} /> Payment Page
+        </span>
+      </div>
+
+      {/* Centered content */}
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+        <div style={{ width: "100%", maxWidth: 560 }}>
+          {/* Icon */}
+          <div style={{ width: 52, height: 52, background: "#eef2ff", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20, fontSize: 22, color: C.blue }}>
+            ✦
+          </div>
+
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: C.text, margin: "0 0 8px", letterSpacing: "-0.02em" }}>
+            Describe your payment page
+          </h2>
+          <p style={{ fontSize: 14, color: C.textMuted, margin: "0 0 28px", lineHeight: 1.65 }}>
+            Tell us what you&apos;re selling or collecting payments for and we&apos;ll pre-fill the whole wizard for you.
+          </p>
+
+          <textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleGenerate(); }}
+            disabled={loading}
+            rows={5}
+            placeholder={"e.g. Tickets for our design conference on 20 July in Bengaluru. Early Bird ₹999, VIP ₹4,999. Collect company name.\n\nor: Online bakery — chocolate cake ₹800, cupcakes ₹400. Need delivery address.\n\nor: Monthly SaaS subscription at ₹1,999. Collect name and email."}
+            style={{
+              width: "100%", padding: "14px 16px", border: `1.5px solid ${C.border}`, borderRadius: radius.lg,
+              fontSize: 14, fontFamily: "inherit", lineHeight: 1.6, resize: "vertical", outline: "none",
+              boxSizing: "border-box", color: C.text, background: loading ? C.bg : C.white,
+              transition: "border-color 0.15s",
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = C.blue; }}
+            onBlur={e => { e.currentTarget.style.borderColor = C.border; }}
+          />
+
+          {error && (
+            <p style={{ fontSize: 12, color: C.red, margin: "8px 0 0", lineHeight: 1.5 }}>{error}</p>
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            <Btn onClick={handleGenerate} disabled={!prompt.trim() || loading} size="lg" fullWidth>
+              {loading ? "Generating…" : "Generate with AI →"}
+            </Btn>
+          </div>
+
+          <p style={{ fontSize: 11, color: C.textFaint, margin: "10px 0 0", textAlign: "center" }}>
+            ⌘↵ to generate · Review everything before publishing
+          </p>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "24px 0" }}>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+            <span style={{ fontSize: 12, color: C.textFaint }}>or</span>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+          </div>
+
+          <button
+            onClick={onSkip}
+            style={{ width: "100%", padding: "11px", background: C.white, border: `1.5px solid ${C.border}`, borderRadius: radius.md, color: C.textSecondary, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}
+          >
+            Set up manually →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Wizard Sidebar — vertical step list
 // ──────────────────────────────────────────────────────────────────────────────
 function WizardStepper({
@@ -295,12 +410,15 @@ export function Wizard({
   onSyncState?: (data: WizardData, step: number, building: boolean) => void;
 }) {
   const seed = initialData ?? DEFAULT_WIZARD;
-  const [phase, setPhase] = useState<"wizard" | "success">("wizard");
+  const [phase, setPhase] = useState<"ai-entry" | "wizard" | "success">(editing ? "wizard" : "ai-entry");
   const [currentStep, setCurrentStep] = useState(editing ? initialStep : 0);
   const [data, setData] = useState<WizardData>(seed);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   // Publish-time validation errors, keyed by step index. Empty until a blocked publish.
   const [publishErrors, setPublishErrors] = useState<ValidationError[]>([]);
+  // AI-generated assumptions — shown as a dismissable banner above the form.
+  const [aiAssumptions, setAiAssumptions] = useState<string[]>([]);
+  const [showAssumptions, setShowAssumptions] = useState(false);
 
   // Mirror live builder state up to the app so the global home button can offer
   // "save as draft" when the merchant tries to leave with unsaved changes.
@@ -309,6 +427,25 @@ export function Wizard({
     // onSyncState intentionally excluded from deps to avoid identity-churn loops.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, currentStep, phase]);
+
+  const handleAiGenerate = (config: Partial<WizardData>, assumptions: string[]) => {
+    setData({ ...DEFAULT_WIZARD, ...config });
+    setAiAssumptions(assumptions);
+    setShowAssumptions(assumptions.length > 0);
+    setPhase("wizard");
+  };
+
+  if (phase === "ai-entry") {
+    return (
+      <div style={{ flex: 1, display: "flex" }}>
+        <AiEntryScreen
+          onGenerate={handleAiGenerate}
+          onSkip={() => setPhase("wizard")}
+          onExit={onBack}
+        />
+      </div>
+    );
+  }
 
   const steps = getSteps();
   const totalSteps = steps.length;
@@ -369,6 +506,23 @@ export function Wizard({
         {/* Form area */}
         <div style={{ width: 460, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, flexShrink: 0, background: C.white }}>
           <div style={{ flex: 1, padding: "26px 28px", overflowY: "auto" }}>
+            {/* AI assumptions banner — shown after AI generation until dismissed */}
+            {showAssumptions && aiAssumptions.length > 0 && (
+              <div style={{ background: "#fffbeb", border: `1px solid #f3d699`, borderRadius: radius.md, padding: "12px 14px", marginBottom: 20, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "#92591a", margin: "0 0 6px" }}>
+                    AI filled this page — review before publishing:
+                  </p>
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    {aiAssumptions.map((a, i) => (
+                      <li key={i} style={{ fontSize: 12, color: "#78450f", lineHeight: 1.65 }}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+                <button onClick={() => setShowAssumptions(false)} style={{ background: "none", border: "none", color: "#92591a", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0, fontFamily: "inherit" }}>×</button>
+              </div>
+            )}
+
             {/* Publish-time validation summary — only after a blocked publish */}
             {publishErrors.length > 0 && (
               <div style={{ background: C.redBg, border: `1px solid ${C.redMid}`, borderRadius: radius.md, padding: "12px 14px", marginBottom: 20 }}>

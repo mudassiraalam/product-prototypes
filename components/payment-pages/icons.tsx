@@ -21,7 +21,7 @@ export type IconName =
   | "monitor" | "smartphone" | "button"
   // preview info / contact
   | "lock" | "calendar" | "mapPin" | "mail" | "phone" | "clock" | "user" | "globe" | "eye"
-  | "edit" | "trash" | "pause" | "play" | "help" | "subscriptions"
+  | "edit" | "trash" | "pause" | "play" | "help" | "subscriptions" | "flag"
   // brand / social
   | "whatsapp" | "facebook" | "x";
 
@@ -30,7 +30,7 @@ const STROKE: IconName[] = [
   "invoice", "donation", "ticket", "bag", "coins", "card", "receipt", "handshake",
   "search", "download", "copy", "archive", "ban", "checkCircle", "refresh", "expand", "redirect", "qr",
   "monitor", "smartphone", "lock", "calendar", "mapPin", "mail", "phone", "clock", "user", "globe", "eye",
-  "edit", "trash", "pause", "play", "help", "button", "subscriptions",
+  "edit", "trash", "pause", "play", "help", "button", "subscriptions", "flag",
 ];
 
 // Path/children for each icon, drawn on a 24×24 grid.
@@ -88,6 +88,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   facebook: (<path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z" />),
   x: (<path d="M18.2 2h3.3l-7.2 8.3L23 22h-6.6l-5.2-6.8L5.3 22H2l7.7-8.8L1.5 2h6.8l4.7 6.2zm-1.2 18h1.8L7.1 3.9H5.2z" />),
   subscriptions: (<><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3" /><path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 6.4-2.6M21 12a9 9 0 0 0-2.6-6.4M21 7v5h-5" /></>),
+  flag: (<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></>),
 };
 
 export function Icon({
