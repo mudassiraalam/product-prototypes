@@ -17,19 +17,21 @@ import {
 function AiEntryScreen({
   onGenerate, onSkip, onExit,
 }: {
-  onGenerate: (config: Partial<WizardData>, assumptions: string[]) => void;
+  onGenerate: (config: Partial<WizardData>, assumptions: string[], provider?: string) => void;
   onSkip: () => void;
   onExit: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [outOfScope, setOutOfScope] = useState(false);
 
   const handleGenerate = async () => {
     const trimmed = prompt.trim();
     if (!trimmed || loading) return;
     setLoading(true);
     setError("");
+    setOutOfScope(false);
     try {
       const res = await fetch("/api/generate-page", {
         method: "POST",
@@ -38,7 +40,8 @@ function AiEntryScreen({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `Server error ${res.status}`);
-      onGenerate(json.config ?? {}, json.assumptions ?? []);
+      if (json.outOfScope) { setOutOfScope(true); setLoading(false); return; }
+      onGenerate(json.config ?? {}, json.assumptions ?? [], json.provider);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again or set up manually.");
       setLoading(false);
@@ -79,7 +82,7 @@ function AiEntryScreen({
 
           <textarea
             value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            onChange={e => { setPrompt(e.target.value); if (outOfScope) setOutOfScope(false); }}
             onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleGenerate(); }}
             disabled={loading}
             rows={5}
@@ -96,6 +99,17 @@ function AiEntryScreen({
 
           {error && (
             <p style={{ fontSize: 12, color: C.red, margin: "8px 0 0", lineHeight: 1.5 }}>{error}</p>
+          )}
+
+          {outOfScope && (
+            <div style={{ background: "#fffbeb", border: `1px solid #f3d699`, borderRadius: radius.md, padding: "12px 14px", marginTop: 10 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#92591a", margin: "0 0 4px" }}>
+                That doesn&apos;t look like a payment page
+              </p>
+              <p style={{ fontSize: 12, color: "#78450f", margin: 0, lineHeight: 1.55 }}>
+                Describe what you&apos;re collecting payment for — a product, event tickets, a donation, or a subscription — and it&apos;ll fill the wizard for you.
+              </p>
+            </div>
           )}
 
           <div style={{ marginTop: 14 }}>
@@ -419,6 +433,7 @@ export function Wizard({
   // AI-generated assumptions — shown as a dismissable banner above the form.
   const [aiAssumptions, setAiAssumptions] = useState<string[]>([]);
   const [showAssumptions, setShowAssumptions] = useState(false);
+  const [aiProvider, setAiProvider] = useState<string | undefined>(undefined);
 
   // Mirror live builder state up to the app so the global home button can offer
   // "save as draft" when the merchant tries to leave with unsaved changes.
@@ -428,10 +443,11 @@ export function Wizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, currentStep, phase]);
 
-  const handleAiGenerate = (config: Partial<WizardData>, assumptions: string[]) => {
+  const handleAiGenerate = (config: Partial<WizardData>, assumptions: string[], provider?: string) => {
     setData({ ...DEFAULT_WIZARD, ...config });
     setAiAssumptions(assumptions);
     setShowAssumptions(assumptions.length > 0);
+    setAiProvider(provider);
     setPhase("wizard");
   };
 
@@ -513,13 +529,34 @@ export function Wizard({
                   <p style={{ fontSize: 12, fontWeight: 700, color: "#92591a", margin: "0 0 6px" }}>
                     AI filled this page — review before publishing:
                   </p>
+                  {aiProvider === "groq-70b" && (
+                    <>
+                      <p style={{ fontSize: 11, color: "#92591a", margin: "0 0 6px", fontWeight: 400, opacity: 0.8 }}>
+                        Generated with the primary model (Llama 3.3 70B)
+                      </p>
+                      <div style={{ height: 1, background: "#f3d699", margin: "0 0 8px" }} />
+                    </>
+                  )}
+                  {aiProvider === "groq-8b" && (
+                    <>
+                      <div style={{ background: C.white, border: `1px solid #f3d699`, borderRadius: radius.sm, padding: "8px 10px", marginBottom: 8 }}>
+                        <p style={{ fontSize: 12, fontWeight: 500, color: "#92591a", margin: "0 0 3px" }}>
+                          ℹ Generated with the backup model (Llama 3.1 8B)
+                        </p>
+                        <p style={{ fontSize: 11, color: "#78450f", margin: 0, lineHeight: 1.5 }}>
+                          The primary model was busy or over its daily limit. Output may be lower quality or contain mistakes — regenerate later for the best result.
+                        </p>
+                      </div>
+                      <div style={{ height: 1, background: "#f3d699", margin: "0 0 8px" }} />
+                    </>
+                  )}
                   <ul style={{ margin: 0, paddingLeft: 16 }}>
                     {aiAssumptions.map((a, i) => (
                       <li key={i} style={{ fontSize: 12, color: "#78450f", lineHeight: 1.65 }}>{a}</li>
                     ))}
                   </ul>
                 </div>
-                <button onClick={() => setShowAssumptions(false)} style={{ background: "none", border: "none", color: "#92591a", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0, fontFamily: "inherit" }}>×</button>
+                <button onClick={() => { setShowAssumptions(false); setAiProvider(undefined); }} style={{ background: "none", border: "none", color: "#92591a", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0, fontFamily: "inherit" }}>×</button>
               </div>
             )}
 

@@ -1,10 +1,26 @@
 import Groq, { RateLimitError } from "groq-sdk";
-import { GoogleGenAI } from "@google/genai";
 import type { WizardData } from "@/components/payment-pages/wizard-steps";
 
 const SYSTEM_PROMPT = `You convert a merchant's plain-English description into a JSON config for an EnKash Payment Page. Output ONLY one JSON object — no markdown, no code fences, no text around it.
 
-Shape: { "config": { ...only keys you can determine... }, "assumptions": [ ...specific notes... ] }
+Shape (two possibilities):
+  Build   → { "config": { ...only keys you can determine... }, "assumptions": [ ...specific notes... ] }
+  Refusal → { "outOfScope": true, "reason": "<=10 words why" }
+
+SCOPE GATE — check this FIRST, before anything else:
+This tool ONLY sets up EnKash Payment Pages — pages that collect a payment
+(selling a product, event tickets, a donation, a subscription, fees, etc.).
+Decide whether the input is actually a request to collect a payment.
+• If it IS — even an unusual or niche one — build the page normally.
+• If it is NOT — drafting an email/message, answering a question, writing an
+  essay/poem/code, general chit-chat, or nonsense — do NOT fabricate a page.
+  Output exactly { "outOfScope": true, "reason": "<=10 words why" } and nothing else.
+This gate is about whether there's a payment to collect, NOT whether the business
+is unusual. An odd-but-real product still builds (see CORE RULE 6). When unsure,
+lean toward building.
+Examples:
+• "help me draft a leave email" -> { "outOfScope": true, "reason": "email drafting, not a payment page" }
+• "sell my bath water at 500 per litre" -> build the page normally.
 
 ═══ WHAT YOU CONTROL — these are the ONLY fields you can set ═══
 If a request maps to a field below, set it. If it does NOT map to any field here, you cannot do it (see CORE RULE 5).
@@ -75,17 +91,23 @@ Output: {"config":{"title":"Supcakes","description":"Supcakes for sale","amountT
 // Runs on the raw text from whichever provider answered.
 function parseAndNormalize(
   raw: string
-): { config: Partial<WizardData>; assumptions: string[] } | null {
+): { config: Partial<WizardData>; assumptions: string[] } | { outOfScope: true; reason?: string } | null {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
-  let parsed: { config: Partial<WizardData>; assumptions: string[] } | null = null;
+  let parsed: { config?: Partial<WizardData>; assumptions?: string[]; outOfScope?: boolean; reason?: string } | null = null;
   try {
     parsed = JSON.parse(cleaned);
   } catch {
     return null;
   }
 
-  if (!parsed || typeof parsed.config !== "object") return null;
+  if (!parsed) return null;
+
+  if (parsed.outOfScope === true) {
+    return { outOfScope: true, reason: parsed.reason };
+  }
+
+  if (typeof parsed.config !== "object" || !parsed.config) return null;
 
   const cfg = parsed.config;
 
@@ -110,11 +132,11 @@ function parseAndNormalize(
   return { config: cfg, assumptions: parsed.assumptions ?? [] };
 }
 
-// ── Groq (primary) ────────────────────────────────────────────────────────────
-async function callGroq(merchantPrompt: string): Promise<string> {
+// ── Groq ──────────────────────────────────────────────────────────────────────
+async function callGroq(merchantPrompt: string, model: string): Promise<string> {
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+    model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: merchantPrompt },
@@ -125,54 +147,68 @@ async function callGroq(merchantPrompt: string): Promise<string> {
   return completion.choices[0].message.content ?? "";
 }
 
-// ── Gemini (fallback) ─────────────────────────────────────────────────────────
-async function callGemini(merchantPrompt: string): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY environment variable is not set");
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash",
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-    },
-    contents: merchantPrompt,
-  });
-  return response.text ?? "";
-}
-
 // ── Public entry point ────────────────────────────────────────────────────────
 export async function generatePageConfig(
   merchantPrompt: string
-): Promise<{ config: Partial<WizardData>; assumptions: string[]; provider: "groq" | "gemini" } | null> {
-  // 1. Try Groq first (one retry on 429, then fall through to Gemini)
+): Promise<
+  | { ok: true; config: Partial<WizardData>; assumptions: string[]; provider: "groq-70b" | "groq-8b" }
+  | { outOfScope: true; reason?: string }
+  | { ok: false; reason: "rate_limited" | "unparseable" }
+> {
+  const MODEL_70B = "llama-3.3-70b-versatile";
+  const MODEL_8B  = "llama-3.1-8b-instant";
+  let fell70bDueToRateLimit = false;
+
+  // ── 1. Try 70B ───────────────────────────────────────────────────────────────
+  let raw70b: string | null = null;
   try {
-    let raw: string;
-    try {
-      raw = await callGroq(merchantPrompt);
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        console.error("[page-agent] Groq rate-limited (429) — waiting 2s and retrying once.");
-        await new Promise(res => setTimeout(res, 2000));
-        raw = await callGroq(merchantPrompt);
+    raw70b = await callGroq(merchantPrompt, MODEL_70B);
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      const isTPD = /per day|tokens per day|TPD/i.test((err as Error).message);
+      if (isTPD) {
+        console.log("[page-agent] 70B daily limit (TPD) — falling to 8B immediately.");
+        fell70bDueToRateLimit = true;
       } else {
-        throw err;
+        console.log("[page-agent] 70B per-minute limit (TPM) — waiting 2s, retrying once.");
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          raw70b = await callGroq(merchantPrompt, MODEL_70B);
+        } catch (retryErr) {
+          console.log("[page-agent] 70B retry failed — falling to 8B.");
+          fell70bDueToRateLimit = retryErr instanceof RateLimitError;
+        }
       }
+    } else {
+      console.log("[page-agent] 70B error — falling to 8B:", (err as Error).message);
     }
-    const result = parseAndNormalize(raw);
-    if (result) return { ...result, provider: "groq" };
-  } catch {
-    // fall through to Gemini
   }
 
-  // 2. Gemini fallback
+  if (raw70b !== null) {
+    const result = parseAndNormalize(raw70b);
+    if (result) {
+      if ("outOfScope" in result) { console.log("[page-agent] outOfScope:", result.reason); return result; }
+      console.log("[page-agent] provider: groq-70b");
+      return { ok: true, ...result, provider: "groq-70b" };
+    }
+    // parse returned null — fall through to 8B
+  }
+
+  // ── 2. 8B fallback ───────────────────────────────────────────────────────────
+  console.log("[page-agent] Firing 8B fallback.");
   try {
-    const raw = await callGemini(merchantPrompt);
-    const result = parseAndNormalize(raw);
-    if (result) return { ...result, provider: "gemini" };
-  } catch {
-    // both failed
+    const raw8b = await callGroq(merchantPrompt, MODEL_8B);
+    const result = parseAndNormalize(raw8b);
+    if (result) {
+      if ("outOfScope" in result) { console.log("[page-agent] outOfScope (8B):", result.reason); return result; }
+      console.log("[page-agent] provider: groq-8b");
+      return { ok: true, ...result, provider: "groq-8b" };
+    }
+    return { ok: false, reason: "unparseable" };
+  } catch (err) {
+    if (err instanceof RateLimitError || fell70bDueToRateLimit) {
+      return { ok: false, reason: "rate_limited" };
+    }
+    return { ok: false, reason: "unparseable" };
   }
-
-  return null;
 }
