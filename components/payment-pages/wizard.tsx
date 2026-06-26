@@ -83,7 +83,7 @@ function AiEntryScreen({
             onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleGenerate(); }}
             disabled={loading}
             rows={5}
-            placeholder={"e.g. Tickets for our design conference on 20 July in Bengaluru. Early Bird ₹999, VIP ₹4,999. Collect company name.\n\nor: Online bakery — chocolate cake ₹800, cupcakes ₹400. Need delivery address.\n\nor: Monthly SaaS subscription at ₹1,999. Collect name and email."}
+            placeholder={"e.g. Tickets for our design conference on 20 July in Bengaluru. Early Bird ₹999, VIP ₹4,999. Collect company name. Use a deep purple brand colour.\n\nor: Online bakery — chocolate cake ₹800, cupcakes ₹400. Need delivery address. Dark mode.\n\nor: Monthly SaaS subscription at ₹1,999. Collect name and email, with a #16A34A green accent."}
             style={{
               width: "100%", padding: "14px 16px", border: `1.5px solid ${C.border}`, borderRadius: radius.lg,
               fontSize: 14, fontFamily: "inherit", lineHeight: 1.6, resize: "vertical", outline: "none",
