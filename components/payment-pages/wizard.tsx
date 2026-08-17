@@ -529,19 +529,19 @@ export function Wizard({
                   <p style={{ fontSize: 12, fontWeight: 700, color: "#92591a", margin: "0 0 6px" }}>
                     AI filled this page — review before publishing:
                   </p>
-                  {aiProvider === "groq-70b" && (
+                  {aiProvider === "groq-120b" && (
                     <>
                       <p style={{ fontSize: 11, color: "#92591a", margin: "0 0 6px", fontWeight: 400, opacity: 0.8 }}>
-                        Generated with the primary model (Llama 3.3 70B)
+                        Generated with the primary model (GPT OSS 120B)
                       </p>
                       <div style={{ height: 1, background: "#f3d699", margin: "0 0 8px" }} />
                     </>
                   )}
-                  {aiProvider === "groq-8b" && (
+                  {aiProvider === "groq-27b" && (
                     <>
                       <div style={{ background: C.white, border: `1px solid #f3d699`, borderRadius: radius.sm, padding: "8px 10px", marginBottom: 8 }}>
                         <p style={{ fontSize: 12, fontWeight: 500, color: "#92591a", margin: "0 0 3px" }}>
-                          ℹ Generated with the backup model (Llama 3.1 8B)
+                          ℹ Generated with the backup model (Qwen 3.6 27B)
                         </p>
                         <p style={{ fontSize: 11, color: "#78450f", margin: 0, lineHeight: 1.5 }}>
                           The primary model was busy or over its daily limit. Output may be lower quality or contain mistakes — regenerate later for the best result.

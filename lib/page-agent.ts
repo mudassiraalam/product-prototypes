@@ -151,12 +151,12 @@ async function callGroq(merchantPrompt: string, model: string): Promise<string> 
 export async function generatePageConfig(
   merchantPrompt: string
 ): Promise<
-  | { ok: true; config: Partial<WizardData>; assumptions: string[]; provider: "groq-70b" | "groq-8b" }
+  | { ok: true; config: Partial<WizardData>; assumptions: string[]; provider: "groq-120b" | "groq-27b" }
   | { outOfScope: true; reason?: string }
   | { ok: false; reason: "rate_limited" | "unparseable" }
 > {
-  const MODEL_70B = "llama-3.3-70b-versatile";
-  const MODEL_8B  = "llama-3.1-8b-instant";
+  const MODEL_70B = "openai/gpt-oss-120b";
+  const MODEL_8B  = "qwen/qwen3.6-27b";
   let fell70bDueToRateLimit = false;
 
   // ── 1. Try 70B ───────────────────────────────────────────────────────────────
@@ -188,8 +188,8 @@ export async function generatePageConfig(
     const result = parseAndNormalize(raw70b);
     if (result) {
       if ("outOfScope" in result) { console.log("[page-agent] outOfScope:", result.reason); return result; }
-      console.log("[page-agent] provider: groq-70b");
-      return { ok: true, ...result, provider: "groq-70b" };
+      console.log("[page-agent] provider: groq-120b");
+      return { ok: true, ...result, provider: "groq-120b" };
     }
     // parse returned null — fall through to 8B
   }
@@ -201,8 +201,8 @@ export async function generatePageConfig(
     const result = parseAndNormalize(raw8b);
     if (result) {
       if ("outOfScope" in result) { console.log("[page-agent] outOfScope (8B):", result.reason); return result; }
-      console.log("[page-agent] provider: groq-8b");
-      return { ok: true, ...result, provider: "groq-8b" };
+      console.log("[page-agent] provider: groq-27b");
+      return { ok: true, ...result, provider: "groq-27b" };
     }
     return { ok: false, reason: "unparseable" };
   } catch (err) {
